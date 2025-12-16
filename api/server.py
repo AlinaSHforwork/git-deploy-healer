@@ -1,9 +1,11 @@
 import os
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+import asyncio
 from contextlib import asynccontextmanager
+from fastapi import FastAPI, BackgroundTasks, Request
+from fastapi.templating import Jinja2Templates
 from loguru import logger
 from core.engine import ContainerEngine
-from core.git_manager import GitManager  
+from core.git_manager import GitManager
 from core.proxy_manager import ProxyManager
 from core.healer import ContainerHealer
 from .schemas import PushEvent
@@ -16,9 +18,15 @@ async def lifespan(app: FastAPI):
     task.cancel()
 
 app = FastAPI(title="PyPaaS API", lifespan=lifespan)
-app = FastAPI(title="PyPaaS API")
+templates = Jinja2Templates(directory="templates")
+
+@app.get("/")
+async def get_dashboard(request: Request):
+    apps = engine.list_apps()
+    return templates.TemplateResponse("dashboard.html", {"request": request, "apps": apps})
+
 engine = ContainerEngine()
-git_manager = GitManager()  
+git_manager = GitManager()
 proxy_manager = ProxyManager()
 
 def handle_deployment(event: PushEvent):
@@ -36,7 +44,6 @@ def handle_deployment(event: PushEvent):
             logger.error(f"Deployment failed: {result.error}")
         else:
             proxy_manager.register_app(app_name, result.host_port)
-            
             logger.success(f"Deployed {app_name} on port {result.host_port}")
             logger.success(f"URL: http://{app_name}.localhost")
             
