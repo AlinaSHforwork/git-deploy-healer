@@ -2,26 +2,21 @@ import os
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from loguru import logger
 from core.engine import ContainerEngine
+from core.git_manager import GitManager  
 from .schemas import PushEvent
 
 app = FastAPI(title="PyPaaS API")
 engine = ContainerEngine()
-
-# NOTE: For now, we simulate cloning by assuming code exists locally
-# In Phase 3, we will implement actual 'git clone' logic
-REPO_STORAGE_PATH = "./repos" 
+git_manager = GitManager()  
 
 def handle_deployment(event: PushEvent):
     app_name = event.repository.name
-    repo_path = os.path.join(REPO_STORAGE_PATH, app_name)
+    clone_url = event.repository.clone_url
     
     logger.info(f"Background task started for {app_name}")
 
-    if not os.path.exists(repo_path):
-        logger.error(f"Repository not found at {repo_path}")
-        return
-
     try:
+        repo_path = git_manager.update_repo(app_name, clone_url)
         tag = engine.build_image(repo_path, app_name)
         result = engine.deploy(app_name, tag)
         
