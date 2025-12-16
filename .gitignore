@@ -1,4 +1,19 @@
+# Python System Files
 __pycache__/
-venv/
 *.pyc
+venv/
+
+# Environment Variables (Secrets)
 .env
+
+# Runtime Data (IMPORTANT: Don't commit these)
+repos/
+nginx_confs/
+
+# Logs
+*.log
+
+# IDE Settings (Optional)
+.vscode/
+.idea/
+.DS_Store

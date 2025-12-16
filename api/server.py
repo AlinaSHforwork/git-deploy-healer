@@ -1,4 +1,5 @@
 import os
+import re
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, BackgroundTasks, Request
@@ -32,6 +33,10 @@ proxy_manager = ProxyManager()
 def handle_deployment(event: PushEvent):
     app_name = event.repository.name
     clone_url = event.repository.clone_url
+
+    if not re.match(r"^[a-zA-Z0-9_-]+$", app_name):
+        logger.error(f"Security Alert: Invalid app name '{app_name}'")
+        return
     
     logger.info(f"Background task started for {app_name}")
 
