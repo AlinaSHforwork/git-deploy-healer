@@ -1,11 +1,21 @@
 import os
 from fastapi import FastAPI, BackgroundTasks, HTTPException
+from contextlib import asynccontextmanager
 from loguru import logger
 from core.engine import ContainerEngine
 from core.git_manager import GitManager  
 from core.proxy_manager import ProxyManager
+from core.healer import ContainerHealer
 from .schemas import PushEvent
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    healer = ContainerHealer(interval=10)
+    task = asyncio.create_task(healer.start())
+    yield
+    task.cancel()
+
+app = FastAPI(title="PyPaaS API", lifespan=lifespan)
 app = FastAPI(title="PyPaaS API")
 engine = ContainerEngine()
 git_manager = GitManager()  
