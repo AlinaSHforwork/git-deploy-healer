@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PyPaaS Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .status-running { color: green; font-weight: bold; }
+        .status-exited { color: red; font-weight: bold; }
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">🚀 PyPaaS Dashboard</h1>
+        <button onclick="window.location.reload()" class="btn btn-primary btn-sm">Refresh</button>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>App Name</th>
+                        <th>Container ID</th>
+                        <th>Status</th>
+                        <th>Port</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for app in apps %}
+                    <tr>
+                        <td class="fw-bold">{{ app.name }}</td>
+                        <td class="text-muted">{{ app.id }}</td>
+                        <td>
+                            <span class="status-{{ app.status }}">
+                                {{ app.status|upper }}
+                            </span>
+                        </td>
+                        <td>{{ app.port }}</td>
+                        <td>
+                            {% if app.status == 'running' %}
+                                <a href="{{ app.url }}" target="_blank" class="btn btn-success btn-sm">Open App ↗</a>
+                            {% else %}
+                                <span class="text-muted">Unavailable</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    {% if not apps %}
+    <div class="text-center mt-4">
+        <p class="text-muted">No apps deployed yet.</p>
+    </div>
+    {% endif %}
+</div>
+
+</body>
+</html>
