@@ -3,11 +3,13 @@ from fastapi import FastAPI, BackgroundTasks, HTTPException
 from loguru import logger
 from core.engine import ContainerEngine
 from core.git_manager import GitManager  
+from core.proxy_manager import ProxyManager
 from .schemas import PushEvent
 
 app = FastAPI(title="PyPaaS API")
 engine = ContainerEngine()
 git_manager = GitManager()  
+proxy_manager = ProxyManager()
 
 def handle_deployment(event: PushEvent):
     app_name = event.repository.name
@@ -23,7 +25,10 @@ def handle_deployment(event: PushEvent):
         if result.status == "failed":
             logger.error(f"Deployment failed: {result.error}")
         else:
+            proxy_manager.register_app(app_name, result.host_port)
+            
             logger.success(f"Deployed {app_name} on port {result.host_port}")
+            logger.success(f"URL: http://{app_name}.localhost")
             
     except Exception as e:
         logger.exception(f"Critical failure in background task: {e}")
