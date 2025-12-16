@@ -74,3 +74,37 @@ class ContainerEngine:
                 c.remove()
             except APIError:
                 c.kill()
+
+    def list_apps(self):
+        """
+        Returns a list of dicts with app details and stats.
+        """
+        apps = []
+        containers = self.client.containers.list(
+            all=True,
+            filters={"label": f"managed_by={self.namespace}"}
+        )
+
+        for container in containers:
+            name = container.labels.get("app", "unknown")
+            port = "N/A"
+            
+            ports_dict = container.attrs['NetworkSettings']['Ports']
+            if ports_dict and '80/tcp' in ports_dict and ports_dict['80/tcp']:
+                port = ports_dict['80/tcp'][0]['HostPort']
+
+            stats_summary = "0%"
+            if container.status == 'running':
+                stats_summary = "Running"
+            else:
+                stats_summary = "Stopped"
+
+            apps.append({
+                "name": name,
+                "id": container.short_id,
+                "status": container.status,
+                "port": port,
+                "url": f"http://{name}.localhost" if container.status == 'running' else "#"
+            })
+            
+        return apps
