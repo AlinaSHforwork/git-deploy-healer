@@ -14,6 +14,13 @@ provider "aws" {
   region = var.aws_region
 }
 
+# Added variable for allowed IPs
+variable "allowed_ips" {
+  type        = list(string)
+  default     = ["0.0.0.0/0"]  # Change to your IP, e.g., ["203.0.113.0/24"]
+  description = "List of CIDR blocks allowed for SSH and API access"
+}
+
 # 2. Key Pair (for SSH)
 resource "aws_key_pair" "deployer_key" {
   key_name   = "pypaas-deployer-key"
@@ -67,7 +74,7 @@ resource "aws_security_group" "pypaas_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] 
+    cidr_blocks = var.allowed_ips 
   }
 
   # Inbound Rule: PyPaaS API/Dashboard (port 8085)
@@ -76,7 +83,7 @@ resource "aws_security_group" "pypaas_sg" {
     from_port   = 8085
     to_port     = 8085
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] 
+    cidr_blocks = var.allowed_ips 
   }
   
   # Outbound Rule: Allow all outbound traffic

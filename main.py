@@ -2,6 +2,7 @@ import sys
 import os
 from loguru import logger
 from core.engine import ContainerEngine
+from core.schemas import DeploymentResult
 
 def main():
     if len(sys.argv) < 3:

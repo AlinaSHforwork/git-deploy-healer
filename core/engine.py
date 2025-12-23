@@ -26,7 +26,7 @@ class ContainerEngine:
             logger.error(f"Build failed: {e}")
             raise e
 
-    def deploy(self, app_name: str, image_tag: str) -> DeploymentResult:
+    def deploy(self, app_name: str, image_tag: str, container_port: int = 80) -> DeploymentResult:
         try:
             self._cleanup_old_containers(app_name)
             
@@ -35,7 +35,7 @@ class ContainerEngine:
             container = self.client.containers.run(
                 image_tag,
                 detach=True,
-                ports={'80/tcp': host_port},
+                ports={f'{container_port}/tcp': host_port},
                 labels={"managed_by": self.namespace, "app": app_name},
                 name=f"{app_name}_{host_port}",
                 restart_policy={"Name": "on-failure", "MaximumRetryCount": 5}
@@ -90,8 +90,11 @@ class ContainerEngine:
             port = "N/A"
             
             ports_dict = container.attrs['NetworkSettings']['Ports']
-            if ports_dict and '80/tcp' in ports_dict and ports_dict['80/tcp']:
-                port = ports_dict['80/tcp'][0]['HostPort']
+            if ports_dict:
+                for internal_port in ports_dict:
+                    if ports_dict[internal_port]:
+                        port = ports_dict[internal_port][0]['HostPort']
+                        break  # Take the first available port
 
             stats_summary = "0%"
             if container.status == 'running':
@@ -104,7 +107,7 @@ class ContainerEngine:
                 "id": container.short_id,
                 "status": container.status,
                 "port": port,
-                "url": f"http://{name}.localhost" if container.status == 'running' else "#"
+                "url": f"http://localhost:{port}" if container.status == 'running' and port != "N/A" else "#"
             })
             
         return apps
