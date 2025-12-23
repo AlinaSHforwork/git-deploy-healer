@@ -23,10 +23,42 @@ Built with DevOps best practices in mind, it includes CI/CD pipelines, Infrastru
 - **Extensibility**: Supports environment variables from `.env` files; dynamic port detection from Dockerfiles.
 
 ## Architecture
-
-[Insert architecture diagram here – e.g., create one using Draw.io or Mermaid showing: Git Webhook → FastAPI Server → Git Manager → Docker Engine → Nginx Proxy → Containers, with Healer Daemon looping. In cloud: ALB → ASG (EC2 instances running PyPaaS).]
-
 PyPaaS runs as a FastAPI service (port 8085) with background tasks for deployments. The healer uses asyncio for periodic checks. In cloud mode, Terraform provisions scalable infrastructure.
+Here's a visual representation of the architecture using Mermaid:
+
+```mermaid
+flowchart TD
+    A[Git Webhook Push Event] -->|Triggers| B[FastAPI Server /webhook]
+    B -->|Validates & Queues| C[Background Deployment Task]
+    C --> D[Git Manager: Clone/Update Repo]
+    D --> E[Container Engine: Build Docker Image]
+    E --> F[Deploy Container: Run with Ports/Labels]
+    F --> G[Proxy Manager: Update Nginx Config]
+    G -->|Routes Traffic| H[Running Containers]
+    I[Healer Daemon] -->|Periodic Check| J[Detect Unhealthy Containers]
+    J -->|Restart/Recreate| F
+
+    subgraph LocalHost [Local/Cloud Host]
+        B
+        C
+        D
+        E
+        F
+        G
+        H
+        I
+        J
+    end
+
+    subgraph Cloud [Cloud Infrastructure]
+        K[ALB: Load Balances Traffic] -->|Forwards to Port 8085| L[ASG: Auto-Scaling EC2 Instances]
+        L -->|Runs PyPaaS| B
+    end
+
+    style LocalHost fill:#e6f7ff,stroke:#91d5ff
+    style Cloud fill:#fff2e8,stroke:#ffd591
+```
+This diagram shows the core flow from Git webhook to deployment and healing, with an overlay for cloud scaling via AWS ALB and ASG.
 
 ## Tech Stack
 
@@ -137,3 +169,4 @@ Integrated via GitHub Actions (`.github/workflows/ci.yml`):
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
+
