@@ -1,0 +1,23 @@
+# monitoring/docker-compose.yml
+version: '3.8'
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: pypaas_prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090" # Prometheus UI
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # Access host machine metrics
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: pypaas_grafana
+    ports:
+      - "3000:3000" # Grafana Dashboard UI
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin # Default password
+    depends_on:
+      - prometheus

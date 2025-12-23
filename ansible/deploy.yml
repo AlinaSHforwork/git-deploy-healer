@@ -1,0 +1,75 @@
+# ansible/deploy.yml
+
+- name: Setup and Deploy PyPaaS Engine
+  hosts: pypaas_host
+  become: yes # Use sudo for system-level installs
+
+  tasks:
+    - name: Update apt cache and Install basic dependencies
+      ansible.builtin.apt:
+        name: 
+          - python3-pip
+          - git
+          - nginx
+          - docker.io # Install Docker
+        update_cache: yes
+        state: present
+
+    - name: Ensure Docker service is running
+      ansible.builtin.service:
+        name: docker
+        state: started
+
+    - name: Add 'ubuntu' user to docker group (to run docker without sudo)
+      ansible.builtin.user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Install Python dependencies for PyPaaS
+      ansible.builtin.pip:
+        requirements: /home/ubuntu/git-deploy-healer/requirements.txt
+        virtualenv: /home/ubuntu/pypaas-venv
+
+    - name: Clone PyPaaS Repository
+      ansible.builtin.git:
+        repo: 'https://github.com/AlinaSHforwork/git-deploy-healer.git'
+        dest: /home/ubuntu/git-deploy-healer
+        clone: yes
+        update: yes
+        version: main
+
+    - name: Build and Start Nginx Proxy Container
+      ansible.builtin.docker_container:
+        name: pypaas-nginx
+        image: nginx:latest
+        state: started
+        # Crucial for Nginx to run on the host's network for dynamic routing
+        network_mode: host 
+        volumes:
+          - /home/ubuntu/git-deploy-healer/nginx_confs:/etc/nginx/conf.d:rw
+
+    - name: Configure PyPaaS as a Systemd Service (Production setup)
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=PyPaaS Engine Service
+          After=network.target docker.service
+          
+          [Service]
+          User=ubuntu
+          WorkingDirectory=/home/ubuntu/git-deploy-healer
+          ExecStart=/usr/bin/python3 -m uvicorn api.server:app --host 0.0.0.0 --port 8085
+          Restart=always
+          
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/pypaas.service
+      notify: Reload Systemd and Start PyPaaS
+
+  handlers:
+    - name: Reload Systemd and Start PyPaaS
+      ansible.builtin.systemd:
+        name: pypaas
+        daemon_reload: yes
+        state: started
