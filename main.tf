@@ -8,18 +8,33 @@ terraform {
       version = "~> 5.0"
     }
   }
+  # Remote state backend for collaboration/CI
+  backend "s3" {
+    bucket         = "your-terraform-state-bucket"  # Replace with your S3 bucket
+    key            = "pypaas/terraform.tfstate"
+    region         = "us-east-1"  # Replace with your region
+    dynamodb_table = "terraform-locks"  # Replace with your DynamoDB table for locking
+    encrypt        = true
+  }
 }
 
 provider "aws" {
   region = var.aws_region
 }
 
-# Added variable for allowed IPs
+# Variables (expanded for flexibility)
+variable "aws_region" { default = "us-east-1" }
+variable "ami_id" { default = "ami-0abcdef1234567890" }  # Replace with actual AMI
+variable "instance_type" { default = "t3.micro" }
+variable "public_key_path" { default = "~/.ssh/id_rsa.pub" }
 variable "allowed_ips" {
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # Change to your IP, e.g., ["203.0.113.0/24"]
-  description = "List of CIDR blocks allowed for SSH and API access"
+  default     = ["203.0.113.0/24"]  # Restrict to your IP/CIDR by default
+  description = "List of CIDR blocks allowed for SSH and HTTP/HTTPS access"
 }
+variable "min_instances" { default = 1 }
+variable "max_instances" { default = 3 }
+variable "desired_capacity" { default = 1 }
 
 # 2. Key Pair (for SSH)
 resource "aws_key_pair" "deployer_key" {
@@ -27,29 +42,34 @@ resource "aws_key_pair" "deployer_key" {
   public_key = file(var.public_key_path)
 }
 
-# 3. Networking (VPC and Subnet)
+# 3. Networking (VPC, Multi-AZ Subnets)
 resource "aws_vpc" "pypaas_vpc" {
   cidr_block = "10.0.0.0/16"
-  tags = {
-    Name = "pypaas-vpc"
-  }
+  tags = { Name = "pypaas-vpc" }
 }
 
-resource "aws_subnet" "pypaas_subnet" {
-  vpc_id     = aws_vpc.pypaas_vpc.id
-  cidr_block = "10.0.1.0/24"
-  map_public_ip_on_launch = true # Required for public access
-  tags = {
-    Name = "pypaas-subnet"
-  }
+resource "aws_subnet" "pypaas_subnet_a" {
+  vpc_id                  = aws_vpc.pypaas_vpc.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "${var.aws_region}a"
+  map_public_ip_on_launch = true
+  tags = { Name = "pypaas-subnet-a" }
 }
 
-# 4. Internet Gateway (for outbound/inbound access)
+resource "aws_subnet" "pypaas_subnet_b" {
+  vpc_id                  = aws_vpc.pypaas_vpc.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "${var.aws_region}b"
+  map_public_ip_on_launch = true
+  tags = { Name = "pypaas-subnet-b" }
+}
+
+# 4. Internet Gateway
 resource "aws_internet_gateway" "pypaas_igw" {
   vpc_id = aws_vpc.pypaas_vpc.id
 }
 
-# 5. Route Table (directs traffic to IGW)
+# 5. Route Table
 resource "aws_route_table" "pypaas_route_table" {
   vpc_id = aws_vpc.pypaas_vpc.id
   route {
@@ -58,56 +78,161 @@ resource "aws_route_table" "pypaas_route_table" {
   }
 }
 
-# Associate route table with subnet
-resource "aws_route_table_association" "pypaas_rta" {
-  subnet_id      = aws_subnet.pypaas_subnet.id
+resource "aws_route_table_association" "pypaas_rta_a" {
+  subnet_id      = aws_subnet.pypaas_subnet_a.id
   route_table_id = aws_route_table.pypaas_route_table.id
 }
 
-# 6. Security Group (Firewall)
+resource "aws_route_table_association" "pypaas_rta_b" {
+  subnet_id      = aws_subnet.pypaas_subnet_b.id
+  route_table_id = aws_route_table.pypaas_route_table.id
+}
+
+# 6. Security Group (with ALB ingress)
 resource "aws_security_group" "pypaas_sg" {
   vpc_id = aws_vpc.pypaas_vpc.id
 
-  # Inbound Rule: SSH access (port 22)
   ingress {
     description = "SSH access"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = var.allowed_ips 
+    cidr_blocks = var.allowed_ips
   }
 
-  # Inbound Rule: PyPaaS API/Dashboard (port 8085)
   ingress {
-    description = "PyPaaS API/Dashboard"
+    description = "PyPaaS API/Dashboard (from ALB)"
     from_port   = 8085
     to_port     = 8085
     protocol    = "tcp"
-    cidr_blocks = var.allowed_ips 
+    security_groups = [aws_security_group.pypaas_alb_sg.id]  # Restrict to ALB
   }
-  
-  # Outbound Rule: Allow all outbound traffic
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  tags = {
-    Name = "pypaas-security-group"
-  }
+  tags = { Name = "pypaas-security-group" }
 }
 
-# 7. EC2 Instance (The PyPaaS Host)
-resource "aws_instance" "pypaas_host" {
-  ami           = var.ami_id
+# ALB Security Group (public access)
+resource "aws_security_group" "pypaas_alb_sg" {
+  vpc_id = aws_vpc.pypaas_vpc.id
+
+  ingress {
+    description = "HTTP access"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_ips  # Or ["0.0.0.0/0"] for public
+  }
+
+  ingress {
+    description = "HTTPS access"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_ips
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = { Name = "pypaas-alb-security-group" }
+}
+
+# 7. IAM Role for EC2 (example: SSM access)
+resource "aws_iam_role" "pypaas_ec2_role" {
+  name = "pypaas-ec2-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "pypaas_ssm" {
+  role       = aws_iam_role.pypaas_ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "pypaas_profile" {
+  name = "pypaas-ec2-profile"
+  role = aws_iam_role.pypaas_ec2_role.name
+}
+
+# 8. Launch Template
+resource "aws_launch_template" "pypaas_lt" {
+  name          = "pypaas-launch-template"
+  image_id      = var.ami_id
   instance_type = var.instance_type
   key_name      = aws_key_pair.deployer_key.key_name
-  subnet_id     = aws_subnet.pypaas_subnet.id
+  iam_instance_profile { name = aws_iam_instance_profile.pypaas_profile.name }
   vpc_security_group_ids = [aws_security_group.pypaas_sg.id]
-  associate_public_ip_address = true
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"  # IMDSv2 for security
+    http_put_response_hop_limit = 1
+  }
+  user_data = base64encode(<<EOF
+#!/bin/bash
+# Your provisioning script here (e.g., install Docker, run Ansible)
+EOF
+  )
+}
 
-  tags = {
-    Name = "PyPaaS-Engine-Host"
+# 9. Auto Scaling Group
+resource "aws_autoscaling_group" "pypaas_asg" {
+  name                = "pypaas-asg"
+  min_size            = var.min_instances
+  max_size            = var.max_instances
+  desired_capacity    = var.desired_capacity
+  vpc_zone_identifier = [aws_subnet.pypaas_subnet_a.id, aws_subnet.pypaas_subnet_b.id]
+  target_group_arns   = [aws_lb_target_group.pypaas_tg.arn]
+
+  launch_template {
+    id      = aws_launch_template.pypaas_lt.id
+    version = "$Latest"
   }
 }
+
+# 10. Application Load Balancer
+resource "aws_lb" "pypaas_alb" {
+  name               = "pypaas-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.pypaas_alb_sg.id]
+  subnets            = [aws_subnet.pypaas_subnet_a.id, aws_subnet.pypaas_subnet_b.id]
+}
+
+resource "aws_lb_target_group" "pypaas_tg" {
+  name     = "pypaas-tg"
+  port     = 8085
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.pypaas_vpc.id
+  health_check {
+    path = "/"
+    port = "8085"
+  }
+}
+
+resource "aws_lb_listener" "pypaas_http" {
+  load_balancer_arn = aws_lb.pypaas_alb.arn
+  port              = 80
+  protocol          = "HTTP"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.pypaas_tg.arn
+  }
+}
+
+# Add HTTPS listener (requires ACM certificate)
+# resource "aws_lb_listener" "pypaas_https" { ... }

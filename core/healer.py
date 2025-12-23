@@ -4,6 +4,13 @@ import docker
 from loguru import logger
 from docker.errors import NotFound, APIError
 from .engine import ContainerEngine  # Import for recreation
+from prometheus_client import Counter
+
+# Duplicate metric definition (consider moving to a shared module)
+HEALER_RESTART_COUNTER = Counter(
+    'pypaas_healer_restarts_total', 
+    'Total number of containers restarted by the self-healing daemon'
+)
 
 class ContainerHealer:
     def __init__(self, interval: int = 10):
@@ -41,6 +48,7 @@ class ContainerHealer:
             container.reload()
             if container.status == 'running':
                 logger.success(f"Successfully revived {container.name}")
+                HEALER_RESTART_COUNTER.inc()  # Increment metric
                 return
             else:
                 logger.warning(f"Restart failed. Recreating {container.name}...")
@@ -51,12 +59,20 @@ class ContainerHealer:
                 
                 image_tag = container.image.tags[0] if container.image.tags else "latest"
                 
+                # Detect original container port from image
+                image = self.client.images.get(image_tag)
+                exposed_ports = image.attrs['Config'].get('ExposedPorts', {})
+                container_port = None
+                if exposed_ports:
+                    container_port = int(list(exposed_ports.keys())[0].split('/')[0])
+                
                 container.stop(timeout=5)
                 container.remove()
                 
-                # Redeploy using engine (assuming default port; pass custom if needed)
-                self.engine.deploy(app_name, image_tag)
+                # Redeploy using engine with detected port
+                self.engine.deploy(app_name, image_tag, container_port=container_port)
                 logger.success(f"Successfully recreated {container.name}")
+                HEALER_RESTART_COUNTER.inc()  # Increment metric
                 
         except APIError as e:
             logger.error(f"Docker API error while healing: {e}")

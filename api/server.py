@@ -6,12 +6,21 @@ from fastapi import FastAPI, BackgroundTasks, Request
 from fastapi.templating import Jinja2Templates
 from loguru import logger
 from prometheus_client import make_asgi_app, Counter, Gauge
+from fastapi import Depends, HTTPException, Security
+from fastapi.security import APIKeyHeader
 
 from core.engine import ContainerEngine
 from core.git_manager import GitManager
 from core.proxy_manager import ProxyManager
 from core.healer import ContainerHealer
 from .schemas import PushEvent
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def get_api_key(api_key: str = Security(api_key_header)):
+    if api_key != os.getenv("API_KEY"):  # Set API_KEY in env
+        raise HTTPException(status_code=403, detail="Invalid API Key")
+    return api_key
 
 # --- Prometheus Metrics Definitions ---
 # Counter: Tracks total number of deployments triggered
@@ -71,7 +80,7 @@ templates = Jinja2Templates(directory="templates")
 # --- Routes ---
 
 @app.get("/")
-async def get_dashboard(request: Request):
+async def dashboard(api_key: str = Depends(get_api_key)):
     apps = engine.list_apps()
     return templates.TemplateResponse("dashboard.html", {"request": request, "apps": apps})
 
@@ -109,7 +118,7 @@ def handle_deployment(event: PushEvent):
         logger.exception(f"Critical failure in background task: {e}")
 
 @app.post("/webhook")
-async def receive_webhook(event: PushEvent, background_tasks: BackgroundTasks):
+async def webhook(payload: dict, api_key: str = Depends(get_api_key)):
     if "refs/heads/main" not in event.ref:
         return {"message": "Ignored non-main branch push"}
 

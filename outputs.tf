@@ -1,11 +1,10 @@
 # outputs.tf
 
-output "pypaas_host_public_ip" {
-  description = "The public IP address of the PyPaaS host."
-  value       = aws_instance.pypaas_host.public_ip
+output "alb_dns_name" {
+  value       = aws_lb.pypaas_alb.dns_name
+  description = "DNS name of the ALB"
 }
 
-output "ssh_command" {
-  description = "SSH command to connect to the instance."
-  value       = "ssh -i <YOUR_PRIVATE_KEY> ubuntu@${aws_instance.pypaas_host.public_ip}"
+output "instance_profile_arn" {
+  value = aws_iam_instance_profile.pypaas_profile.arn
 }

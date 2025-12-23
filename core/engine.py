@@ -3,6 +3,8 @@ from docker.errors import BuildError, APIError
 from loguru import logger
 from .network import PortManager
 from .schemas import DeploymentResult
+import os
+from dotenv import load_dotenv
 
 class ContainerEngine:
     def __init__(self):
@@ -26,20 +28,39 @@ class ContainerEngine:
             logger.error(f"Build failed: {e}")
             raise e
 
-    def deploy(self, app_name: str, image_tag: str, container_port: int = 80) -> DeploymentResult:
+    def deploy(self, app_name: str, image_tag: str, container_port: int | None = None) -> DeploymentResult:
         try:
             self._cleanup_old_containers(app_name)
             
+            # Detect container port from image if not provided
+            if container_port is None:
+                image = self.client.images.get(image_tag)
+                exposed_ports = image.attrs['Config'].get('ExposedPorts', {})
+                if exposed_ports:
+                    # Take the first exposed port (e.g., '5000/tcp' -> 5000)
+                    container_port = int(list(exposed_ports.keys())[0].split('/')[0])
+                else:
+                    container_port = 80
+                logger.info(f"Detected container port: {container_port} for {app_name}")
+
             host_port = self.port_manager.find_free_port()
             
-            container = self.client.containers.run(
-                image_tag,
-                detach=True,
-                ports={f'{container_port}/tcp': host_port},
-                labels={"managed_by": self.namespace, "app": app_name},
-                name=f"{app_name}_{host_port}",
-                restart_policy={"Name": "on-failure", "MaximumRetryCount": 5}
-            )
+            env_path = os.path.join(path_to_app_repo, '.env')  # Assume path_to_app_repo available; adjust if needed
+        if os.path.exists(env_path):
+            load_dotenv(env_path)
+            environment = dict(os.environ)  # Pass all loaded envs
+        else:
+            environment = {}
+
+        container = self.client.containers.run(
+            image_tag,
+            detach=True,
+            ports={f'{container_port}/tcp': host_port},
+            labels={"managed_by": self.namespace, "app": app_name},
+            name=f"{app_name}_{host_port}",
+            restart_policy={"Name": "on-failure", "MaximumRetryCount": 5},
+            environment=environment 
+        )
             
             container.reload()
             if container.status != 'running' and container.status != 'created':
