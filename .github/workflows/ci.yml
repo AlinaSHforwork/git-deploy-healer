@@ -1,0 +1,83 @@
+# .github/workflows/ci.yml
+
+name: CI/CD Pipeline - PyPaaS Engine
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build_and_scan:
+    runs-on: ubuntu-latest
+    
+    # Define variables for the Docker image name and tag
+    env:
+      IMAGE_NAME: pypaas-engine
+      TAG: ${{ github.sha }}
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # ------------------------------------
+      # 1. Code Quality and Testing
+      # ------------------------------------
+      - name: 📦 Install dependencies
+        run: pip install -r requirements.txt pytest
+
+      - name: 🔍 Run Flake8 Linter
+        run: flake8 .
+
+      - name: 🧪 Run Unit Tests (Placeholder)
+        run: pytest # Assuming you'll create a simple test file named 'test_*.py'
+        # Note: You should expand on this test suite in Phase 1.2
+
+      # ------------------------------------
+      # 2. Docker Build and Scan
+      # ------------------------------------
+      - name: 🏗 Build Docker image
+        run: docker build -t $IMAGE_NAME:$TAG .
+        # Note: This assumes you have a Dockerfile in the root. 
+        # If the Dockerfile is elsewhere, adjust the path (e.g., `docker build -t $IMAGE_NAME:$TAG ./core`).
+
+      - name: 🛡 Scan Docker image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@v0.22.0
+        with:
+          image-ref: $IMAGE_NAME:$TAG
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          # Set minimum severity level that should FAIL the build
+          severity: 'HIGH,CRITICAL'
+          
+      # ------------------------------------
+      # 3. Publish (Optional, but recommended)
+      # ------------------------------------
+      - name: 🔑 Login to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🏷 Tag image for GitHub Container Registry (GHCR)
+        if: github.event_name == 'push'
+        run: |
+          IMAGE_ID=ghcr.io/${{ github.repository }}/$IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID >> $GITHUB_ENV
+          docker tag $IMAGE_NAME:$TAG $IMAGE_ID:$TAG
+          docker tag $IMAGE_NAME:$TAG $IMAGE_ID:latest
+          
+      - name: 🚀 Push image to GHCR
+        if: github.event_name == 'push'
+        run: docker push ${{ env.IMAGE_ID }}:$TAG && docker push ${{ env.IMAGE_ID }}:latest
