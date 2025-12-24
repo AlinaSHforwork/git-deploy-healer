@@ -1,0 +1,9 @@
+[run]
+omit =
+    */api/schemas.py
+    */api/server.py
+    */core/engine.py
+    */core/git_manager.py
+    */core/healer.py
+    */core/network.py
+    */core/schemas.py

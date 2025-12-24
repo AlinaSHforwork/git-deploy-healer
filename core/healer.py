@@ -8,6 +8,12 @@ try:
 except Exception:
     HEALER_RESTART_COUNTER = None
 
+try:
+    import docker
+except Exception:
+    # Provide a module-level name so tests can monkeypatch core.healer.docker
+    docker = None
+
 
 class ContainerHealer:
     def __init__(self, interval: int = 10, client=None, engine=None):
@@ -19,7 +25,6 @@ class ContainerHealer:
     @property
     def client(self):
         if self._client is None:
-            import docker
             self._client = docker.from_env()
         return self._client
 
