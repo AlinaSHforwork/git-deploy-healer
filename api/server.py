@@ -23,24 +23,7 @@ async def get_api_key(api_key: str = Security(api_key_header)):
     return api_key
 
 # --- Prometheus Metrics Definitions ---
-# Counter: Tracks total number of deployments triggered
-DEPLOYMENT_COUNTER = Counter(
-    'pypaas_deployments_total', 
-    'Total number of deployment webhooks received'
-)
-
-# Counter: Tracks total containers restarted by the Healer
-# Note: Import this in core/healer.py to increment it on restart
-HEALER_RESTART_COUNTER = Counter(
-    'pypaas_healer_restarts_total', 
-    'Total number of containers restarted by the self-healing daemon'
-)
-
-# Gauge: Tracks currently active/running containers (Goes up and down)
-ACTIVE_CONTAINERS_GAUGE = Gauge(
-    'pypaas_active_containers', 
-    'Number of currently running application containers'
-)
+from core.metrics import DEPLOYMENT_COUNTER, HEALER_RESTART_COUNTER, ACTIVE_CONTAINERS_GAUGE
 
 # --- Core Component Initialization ---
 engine = ContainerEngine()
@@ -97,7 +80,7 @@ def handle_deployment(event: PushEvent):
     try:
         repo_path = git_manager.update_repo(app_name, clone_url)
         tag = engine.build_image(repo_path, app_name)
-        result = engine.deploy(app_name, tag)
+        result = engine.deploy(app_name, tag, repo_path)
         
         if result.status == "failed":
             logger.error(f"Deployment failed: {result.error}")

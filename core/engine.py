@@ -28,7 +28,7 @@ class ContainerEngine:
             logger.error(f"Build failed: {e}")
             raise e
 
-    def deploy(self, app_name: str, image_tag: str, container_port: int | None = None) -> DeploymentResult:
+    def deploy(self, app_name: str, image_tag: str, path: str, container_port: int | None = None) -> DeploymentResult:
         try:
             self._cleanup_old_containers(app_name)
             
@@ -45,26 +45,26 @@ class ContainerEngine:
 
             host_port = self.port_manager.find_free_port()
             
-            env_path = os.path.join(path_to_app_repo, '.env')  # Assume path_to_app_repo available; adjust if needed
-        if os.path.exists(env_path):
-            load_dotenv(env_path)
-            environment = dict(os.environ)  # Pass all loaded envs
-        else:
-            environment = {}
+            env_path = os.path.join(path, '.env')
+            if os.path.exists(env_path):
+                load_dotenv(env_path)
+                environment = dict(os.environ)  # Pass all loaded envs
+            else:
+                environment = {}
 
-        container = self.client.containers.run(
-            image_tag,
-            detach=True,
-            ports={f'{container_port}/tcp': host_port},
-            labels={"managed_by": self.namespace, "app": app_name},
-            name=f"{app_name}_{host_port}",
-            restart_policy={"Name": "on-failure", "MaximumRetryCount": 5},
-            environment=environment 
-        )
+            container = self.client.containers.run(
+                image_tag,
+                detach=True,
+                ports={f'{container_port}/tcp': host_port},
+                labels={"managed_by": self.namespace, "app": app_name},
+                name=f"{app_name}_{host_port}",
+                restart_policy={"Name": "on-failure", "MaximumRetryCount": 5},
+                environment=environment 
+            )
             
             container.reload()
             if container.status != 'running' and container.status != 'created':
-                 raise RuntimeError(f"Container failed to start. Status: {container.status}")
+                raise RuntimeError(f"Container failed to start. Status: {container.status}")
 
             return DeploymentResult(
                 container_id=container.id, 

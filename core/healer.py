@@ -6,11 +6,7 @@ from docker.errors import NotFound, APIError
 from .engine import ContainerEngine  # Import for recreation
 from prometheus_client import Counter
 
-# Duplicate metric definition (consider moving to a shared module)
-HEALER_RESTART_COUNTER = Counter(
-    'pypaas_healer_restarts_total', 
-    'Total number of containers restarted by the self-healing daemon'
-)
+from .metrics import HEALER_RESTART_COUNTER
 
 class ContainerHealer:
     def __init__(self, interval: int = 10):
