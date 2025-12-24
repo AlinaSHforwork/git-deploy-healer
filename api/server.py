@@ -8,6 +8,7 @@ from loguru import logger
 from prometheus_client import make_asgi_app, Counter, Gauge
 from fastapi import Depends, HTTPException, Security
 from fastapi.security import APIKeyHeader
+from fastapi import Request
 
 from core.engine import ContainerEngine
 from core.git_manager import GitManager
@@ -63,9 +64,12 @@ templates = Jinja2Templates(directory="templates")
 # --- Routes ---
 
 @app.get("/")
-async def dashboard(api_key: str = Depends(get_api_key)):
+async def dashboard(request: Request):
     apps = engine.list_apps()
-    return templates.TemplateResponse("dashboard.html", {"request": request, "apps": apps})
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {"request": request, "apps": apps}
+    )
 
 def handle_deployment(event: PushEvent):
     app_name = event.repository.name
