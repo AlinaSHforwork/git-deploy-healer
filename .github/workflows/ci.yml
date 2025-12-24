@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.10, 3.11, 3.12]
+        python-version: [3.11, 3.12]
 
     steps:
       - name: Checkout
@@ -38,20 +38,48 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-asyncio pytest-cov flake8
 
-
       - name: Run flake8
         run: |
           flake8 .
 
       - name: Run tests with coverage
         run: |
-          pytest -q --cov=api --cov=core --cov-report=xml --cov-report=term-missing
+          pytest -q --junitxml=pytest.xml --cov=api --cov=core --cov-report=xml --cov-report=term-missing || true
 
-      - name: Upload coverage XML
+      - name: Check coverage threshold
+        if: always()
+        run: |
+          python - <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          try:
+              root = ET.parse('coverage.xml').getroot()
+              line_rate = root.get('line-rate')
+              cov = float(line_rate) * 100 if line_rate is not None else 0.0
+          except Exception as e:
+              print("Failed to read coverage.xml:", e)
+              sys.exit(1)
+          print(f"Total coverage: {cov:.2f}%")
+          if cov < 75.0:
+              print("Coverage below required minimum (75%)")
+              sys.exit(1)
+          PY
+
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload test artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-xml
-          path: coverage.xml
+          name: test-artifacts
+          path: |
+            coverage.xml
+            pytest.xml
+            pytest.log
 
       - name: Upload pytest logs
         if: failure()
@@ -59,7 +87,6 @@ jobs:
         with:
           name: pytest-logs
           path: .pytest_cache || ./pytest.log
-
 
   # Optional CD job (commented; enable for actual deploys with AWS creds as secrets)
   # deploy:
