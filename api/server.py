@@ -1,22 +1,20 @@
 # api/server.py
-import os
-import re
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, BackgroundTasks, Request, Depends, HTTPException, Security
-from fastapi.templating import Jinja2Templates
+import os
+from fastapi import FastAPI, BackgroundTasks, Security, HTTPException
 from fastapi.security import APIKeyHeader
+from fastapi.templating import Jinja2Templates
 from loguru import logger
 from prometheus_client import make_asgi_app
-from .schemas import PushEvent
 
-# Import core components lazily to avoid import cycles during tests
+# local imports (lazy imports for heavy modules are done inside functions)
 from core.engine import ContainerEngine
 from core.git_manager import GitManager
 from core.proxy_manager import ProxyManager
-# Do not import core.healer here to avoid heavy startup; tests import api.healer directly.
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
 
 async def get_api_key(api_key: str = Security(api_key_header)):
     if api_key != os.getenv("API_KEY"):
@@ -29,6 +27,8 @@ git_manager = GitManager()
 proxy_manager = ProxyManager()
 
 # --- Lifespan Manager (Startup/Shutdown) ---
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize metrics or other startup tasks if needed
@@ -52,12 +52,14 @@ app.mount("/metrics", metrics_app)
 
 templates = Jinja2Templates(directory="templates")
 
+
 @app.get("/health")
 async def health():
     """
     Lightweight health endpoint used by tests.
     """
     return {"status": "ok"}
+
 
 @app.post("/trigger")
 async def trigger(background_tasks: BackgroundTasks = None):
@@ -80,4 +82,3 @@ async def trigger(background_tasks: BackgroundTasks = None):
     except Exception as e:
         logger.exception(f"Trigger failed: {e}")
         return {"message": "Trigger error"}
-

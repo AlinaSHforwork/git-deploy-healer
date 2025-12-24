@@ -1,20 +1,15 @@
-"""
-Test fixtures and global patches to make the test environment safe and deterministic.
-This file patches Docker and the ContainerEngine so importing modules does not
-attempt to contact the Docker socket.
-"""
+# tests/conftest.py
 import sys
 from pathlib import Path
-import pytest
 from unittest.mock import MagicMock, patch
-from httpx import AsyncClient
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# --- httpx AsyncClient compatibility shim for tests ---
-# Wrap httpx.AsyncClient so tests can pass `app=` (ASGI app).
+# httpx AsyncClient compatibility shim for tests (single definition)
 try:
     import httpx as _httpx
     ASGITransport = getattr(_httpx, "ASGITransport", None)
@@ -25,11 +20,10 @@ try:
                 if app is not None and ASGITransport is not None and "transport" not in kwargs:
                     kwargs["transport"] = ASGITransport(app=app)
                 super().__init__(*args, **kwargs)
-        # inject wrapper into httpx module used by tests
         _httpx.AsyncClient = AsyncClient
 except Exception:
-    # If httpx isn't available in the environment, tests will fail later with a clear error.
     pass
+
 
 @pytest.fixture(autouse=True)
 def patch_docker_and_engine():

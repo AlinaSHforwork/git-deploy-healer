@@ -1,10 +1,9 @@
-import asyncio
 import pytest
-from unittest.mock import AsyncMock, MagicMock
-from httpx import AsyncClient
+from unittest.mock import MagicMock
 
 from core.healer import ContainerHealer as Healer
 HealerError = Exception
+
 
 @pytest.mark.asyncio
 async def test_healer_runs_one_cycle(monkeypatch):
@@ -25,6 +24,7 @@ async def test_healer_runs_one_cycle(monkeypatch):
     await healer.check_and_heal()
     healer.git_manager.pull.assert_called_once()
     healer.docker_manager.build_image.assert_called_once()
+
 
 @pytest.mark.asyncio
 async def test_healer_handles_exceptions(monkeypatch):

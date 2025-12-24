@@ -2,7 +2,7 @@ import sys
 import os
 from loguru import logger
 from core.engine import ContainerEngine
-from core.schemas import DeploymentResult
+
 
 def main():
     if len(sys.argv) < 3:
@@ -21,18 +21,19 @@ def main():
     try:
         tag = engine.build_image(project_path, app_name)
         result = engine.deploy(app_name, tag)
-        
+
         if result.status == "failed":
             logger.critical(f"Deployment Failed: {result.error}")
             sys.exit(1)
-            
+
         logger.success(f"Deployed {app_name} successfully!")
         logger.success(f"Container ID: {result.container_id[:12]}")
         logger.success(f"Access it at: http://localhost:{result.host_port}")
 
-    except Exception as e:
+    except Exception:
         logger.exception("Fatal error during execution")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

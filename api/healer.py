@@ -9,6 +9,7 @@ _core_healer = _import("core.healer")
 Healer = getattr(_core_healer, "Healer", None)
 ContainerHealer = getattr(_core_healer, "ContainerHealer", None)
 
+
 def trigger_heal(healer_obj=None):
     """
     Tests monkeypatch this function. Return the coroutine from check_and_heal

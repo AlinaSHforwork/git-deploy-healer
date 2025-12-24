@@ -2,7 +2,7 @@
 from pathlib import Path
 import shutil
 import git
-from git.exc import GitCommandError
+
 
 class GitManager:
     def __init__(self, base_path: str = "/tmp/repos"):

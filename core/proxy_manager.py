@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 
+
 class ProxyManager:
     def __init__(self, nginx_config_path: str = "/etc/nginx/sites-available",
                  nginx_enabled_path: str = "/etc/nginx/sites-enabled"):

@@ -1,6 +1,7 @@
 # core/engine.py
 from typing import Optional, Any, Dict, List
 
+
 class ContainerEngine:
     def __init__(self, client: Optional[Any] = None):
         self._client = client
@@ -58,10 +59,17 @@ class ContainerEngine:
         except Exception:
             raise
 
-    def deploy(self, app_name: str, image_tag: str, repo_path: Optional[str] = None, container_port: Optional[int] = None):
+    def deploy(
+        self,
+        app_name: str,
+        image_tag: str,
+        repo_path: Optional[str] = None,
+        container_port: Optional[int] = None,
+    ):
         client = self.client
         try:
             container = client.containers.run(image_tag, detach=True, labels={"app": app_name})
+
             class Result:
                 status = "ok"
                 host_port = getattr(container, "id", None)

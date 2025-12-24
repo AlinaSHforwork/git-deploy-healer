@@ -8,6 +8,7 @@ try:
 except Exception:
     HEALER_RESTART_COUNTER = None
 
+
 class ContainerHealer:
     def __init__(self, interval: int = 10, client=None, engine=None):
         self._client = client
@@ -95,7 +96,7 @@ class ContainerHealer:
             # swallow exceptions so tests can assert behavior without raising
             return
 
-# Test-oriented orchestrator expected by unit tests
+
 class Healer:
     """
     Lightweight orchestrator used by tests: checks git changes and triggers

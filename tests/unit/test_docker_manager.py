@@ -1,9 +1,9 @@
+from unittest.mock import MagicMock
 import pytest
-from unittest.mock import MagicMock, patch
-from httpx import AsyncClient
 
 from core.engine import ContainerEngine as DockerManager
 DockerError = Exception
+
 
 def test_build_image_success(monkeypatch):
     dm = DockerManager()
@@ -14,15 +14,18 @@ def test_build_image_success(monkeypatch):
     image = dm.build_image(path=".", tag="test:latest")
     assert image is not None
 
+
 def test_build_image_failure(monkeypatch):
     dm = DockerManager()
     fake_client = MagicMock()
+
     def raise_exc(*a, **k):
         raise Exception("build failed")
     fake_client.images.build.side_effect = raise_exc
     monkeypatch.setattr(dm, "client", fake_client)
     with pytest.raises(DockerError):
         dm.build_image(path=".", tag="bad:tag")
+
 
 def test_run_container_and_stop(monkeypatch):
     dm = DockerManager()
