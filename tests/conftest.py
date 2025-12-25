@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from httpx import AsyncClient as _orig_AsyncClient
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -14,7 +15,6 @@ try:
     import httpx as _httpx
 
     ASGITransport = getattr(_httpx, "ASGITransport", None)
-    _orig_AsyncClient = getattr(_httpx, "AsyncClient", None)
     if _orig_AsyncClient is not None:
 
         class AsyncClient(_orig_AsyncClient):

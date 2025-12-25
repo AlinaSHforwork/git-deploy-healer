@@ -4,9 +4,14 @@ from typing import Any, List, Optional
 
 from docker.errors import APIError
 from loguru import logger
+from prometheus_client import Counter as PromCounter
+
+HEALER_RESTART_COUNTER: Optional[PromCounter]
 
 try:
-    from core.metrics import HEALER_RESTART_COUNTER
+    from core.metrics import HEALER_RESTART_COUNTER as imported_counter
+
+    HEALER_RESTART_COUNTER = imported_counter
 except Exception:
     HEALER_RESTART_COUNTER = None
 

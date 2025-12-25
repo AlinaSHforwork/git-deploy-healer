@@ -57,7 +57,11 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          pytest -q --junitxml=pytest.xml --cov=api --cov=core --cov-report=xml --cov-report=term-missing || true
+          pytest -q --junitxml=pytest.xml --cov=api --cov=core --cov-report=xml --cov-report=term-missing || echo "Tests failed"
+
+      - name: Check coverage threshold
+        run: |
+          coverage report --fail-under=80
 
       - name: Check coverage threshold
         if: always()
