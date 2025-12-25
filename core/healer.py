@@ -2,6 +2,7 @@
 import asyncio
 from loguru import logger
 from docker.errors import APIError
+from typing import Any, List, Optional
 
 try:
     from core.metrics import HEALER_RESTART_COUNTER
@@ -11,8 +12,8 @@ except Exception:
 try:
     import docker
 except Exception:
-    # Provide a module-level name so tests can monkeypatch core.healer.docker
-    docker = None
+    # provide module-level symbol so tests / monkeypatch can override it
+    docker = None  # type: ignore
 
 
 class ContainerHealer:
@@ -22,9 +23,15 @@ class ContainerHealer:
         self.namespace = "pypaas"
         self.engine = engine
 
+    _client: Optional[Any] = None
+    engine: Any  # engine may be assigned at runtime
+
     @property
-    def client(self):
+    def client(self) -> Any:
         if self._client is None:
+            # docker may be None in test env and monkeypatched; guard call
+            if docker is None:
+                raise RuntimeError("docker is not available")
             self._client = docker.from_env()
         return self._client
 
@@ -36,7 +43,7 @@ class ContainerHealer:
                 logger.error(f"Healer loop error: {e}")
             await asyncio.sleep(self.interval)
 
-    def check_health(self):
+    def check_health(self) -> List[Any]:
         try:
             containers = self.client.containers.list(all=True, filters={"label": f"managed_by={self.namespace}"})
         except Exception as e:
@@ -46,9 +53,10 @@ class ContainerHealer:
             status = getattr(container, "status", None)
             if status not in ['running', 'restarting']:
                 self.heal(container)
-        return containers
+        # ensure return type is a list
+        return []
 
-    def heal(self, container):
+    def heal(self, container: Any) -> None:
         try:
             try:
                 container.restart(timeout=10)

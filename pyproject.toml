@@ -1,0 +1,15 @@
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+skip-string-normalization = true
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = 3.11
+ignore_missing_imports = true
+# keep checks moderate to avoid large refactors
+strict = false
+warn_unused_configs = true
