@@ -13,7 +13,7 @@ class GitManager:
         Path(self.base_path).mkdir(parents=True, exist_ok=True)
 
     def get_repository_path(self, app_name: str) -> str:
-        return f"{self.base_path}/{app_name}"
+        return str(Path(self.base_path) / app_name)
 
     def repository_exists(self, app_name: str) -> bool:
         """

@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
 
 
 # ---------------------------------------------------------------------------
-# Custom AsyncClient wrapper
+# Custom AsyncClient wrapper (adds ASGITransport when app=... is passed)
 # ---------------------------------------------------------------------------
 ASGITransport = getattr(httpx, "ASGITransport", None)
 
@@ -31,13 +31,13 @@ class AsyncClient(_orig_AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Patch httpx.AsyncClient safely using monkeypatch (mypy‑safe)
+# Patch httpx.AsyncClient for ALL tests (mypy‑safe)
 # ---------------------------------------------------------------------------
 @pytest.fixture(autouse=True)
 def patch_httpx_async_client(monkeypatch):
     """
-    Automatically replace httpx.AsyncClient with our custom AsyncClient
-    for all tests, without assigning to a type (mypy‑safe).
+    Replace httpx.AsyncClient with our custom AsyncClient for all tests.
+    This avoids assigning to a type directly (mypy‑safe).
     """
     monkeypatch.setattr(httpx, "AsyncClient", AsyncClient)
     yield
