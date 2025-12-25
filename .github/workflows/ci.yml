@@ -57,13 +57,17 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          pytest -q --junitxml=pytest.xml --cov=api --cov=core --cov-report=xml --cov-report=term-missing || echo "Tests failed"
+          pytest -q \
+            --junitxml=pytest.xml \
+            --cov=api --cov=core \
+            --cov-report=xml \
+            --cov-report=term-missing
 
-      - name: Check coverage threshold
+      - name: Enforce coverage threshold (coverage report)
         run: |
           coverage report --fail-under=80
 
-      - name: Check coverage threshold
+      - name: Enforce coverage threshold (XML parsing)
         if: always()
         run: |
           python - <<'PY'
@@ -104,6 +108,7 @@ jobs:
         with:
           name: pytest-logs
           path: .pytest_cache || ./pytest.log
+
 
   # Optional CD job (commented; enable for actual deploys with AWS creds as secrets)
   # deploy:
