@@ -6,7 +6,7 @@ scrape_configs:
   - job_name: 'pypaas_engine'
     metrics_path: '/metrics'
     static_configs:
-      # Since we are running in Docker, 'host.docker.internal' allows 
+      # Since we are running in Docker, 'host.docker.internal' allows
       # the container to talk to the localhost of the machine where PyPaaS is running.
       # If running on Linux, you might need to use the host's actual IP or network_mode: host
       - targets: ['host.docker.internal:8085']

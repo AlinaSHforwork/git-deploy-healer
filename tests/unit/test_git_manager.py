@@ -3,8 +3,9 @@ Unit tests for core.git_manager module.
 Tests Git operations including cloning, pulling, and repository management.
 """
 from unittest.mock import Mock, patch
-import pytest
+
 import git
+import pytest
 from git.exc import GitCommandError
 
 from core.git_manager import GitManager
@@ -53,20 +54,20 @@ class TestCloneRepository:
         mock_clone.return_value = mock_repo
 
         result = git_manager.clone_repository(
-            repo_url="https://github.com/test/repo.git",
-            app_name="test-app"
+            repo_url="https://github.com/test/repo.git", app_name="test-app"
         )
 
         expected_path = f"{git_manager.base_path}/test-app"
         mock_clone.assert_called_once_with(
-            "https://github.com/test/repo.git",
-            expected_path
+            "https://github.com/test/repo.git", expected_path
         )
         assert result == expected_path
 
     @patch('core.git_manager.Path.exists')
     @patch('core.git_manager.git.Repo')
-    def test_clone_existing_repository_pulls(self, mock_repo_class, mock_exists, git_manager, mock_repo):
+    def test_clone_existing_repository_pulls(
+        self, mock_repo_class, mock_exists, git_manager, mock_repo
+    ):
         """Test that existing repository is pulled instead of cloned."""
         mock_exists.return_value = True
         mock_repo_class.return_value = mock_repo
@@ -74,8 +75,7 @@ class TestCloneRepository:
         mock_repo.remotes.origin = mock_origin
 
         result = git_manager.clone_repository(
-            repo_url="https://github.com/test/repo.git",
-            app_name="test-app"
+            repo_url="https://github.com/test/repo.git", app_name="test-app"
         )
 
         mock_origin.pull.assert_called_once()
@@ -88,18 +88,18 @@ class TestCloneRepository:
 
         with pytest.raises(GitCommandError):
             git_manager.clone_repository(
-                repo_url="https://github.com/test/repo.git",
-                app_name="test-app"
+                repo_url="https://github.com/test/repo.git", app_name="test-app"
             )
 
     @patch('core.git_manager.git.Repo.clone_from')
-    def test_clone_with_special_characters_in_name(self, mock_clone, git_manager, mock_repo):
+    def test_clone_with_special_characters_in_name(
+        self, mock_clone, git_manager, mock_repo
+    ):
         """Test cloning with special characters in app name."""
         mock_clone.return_value = mock_repo
 
         result = git_manager.clone_repository(
-            repo_url="https://github.com/test/repo.git",
-            app_name="test_app-123"
+            repo_url="https://github.com/test/repo.git", app_name="test_app-123"
         )
 
         assert "test_app-123" in result
@@ -235,7 +235,9 @@ class TestDeleteRepository:
 
     @patch('core.git_manager.shutil.rmtree')
     @patch('core.git_manager.Path.exists')
-    def test_delete_repository_permission_error(self, mock_exists, mock_rmtree, git_manager):
+    def test_delete_repository_permission_error(
+        self, mock_exists, mock_rmtree, git_manager
+    ):
         """Test handling of permission errors during deletion."""
         mock_exists.return_value = True
         mock_rmtree.side_effect = PermissionError("Permission denied")
@@ -279,7 +281,9 @@ class TestIntegration:
 
     @patch('core.git_manager.git.Repo.clone_from')
     @patch('core.git_manager.git.Repo')
-    def test_clone_and_get_commit_hash(self, mock_repo_class, mock_clone, git_manager, mock_repo):
+    def test_clone_and_get_commit_hash(
+        self, mock_repo_class, mock_clone, git_manager, mock_repo
+    ):
         """Test cloning a repository and getting commit hash."""
         mock_clone.return_value = mock_repo
         mock_repo_class.return_value = mock_repo
@@ -287,8 +291,7 @@ class TestIntegration:
 
         # Clone
         path = git_manager.clone_repository(
-            "https://github.com/test/repo.git",
-            "integration-app"
+            "https://github.com/test/repo.git", "integration-app"
         )
 
         # Get commit hash

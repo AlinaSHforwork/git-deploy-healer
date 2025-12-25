@@ -1,13 +1,15 @@
 import os
-import time
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
 import requests
 
-pytestmark = pytest.mark.skipif(os.getenv("RUN_INTEGRATION") != "1",
-                                reason="Integration tests disabled (set RUN_INTEGRATION=1)")
+pytestmark = pytest.mark.skipif(
+    os.getenv("RUN_INTEGRATION") != "1",
+    reason="Integration tests disabled (set RUN_INTEGRATION=1)",
+)
 
 
 def _compose_file():

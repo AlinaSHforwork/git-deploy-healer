@@ -16,7 +16,9 @@ class PortManager:
                     return port
                 except OSError:
                     continue
-        raise RuntimeError(f"No free ports available in range {self.start_port}-{self.end_port}")
+        raise RuntimeError(
+            f"No free ports available in range {self.start_port}-{self.end_port}"
+        )
 
     def is_port_open(self, host: str, port: int) -> bool:
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:

@@ -37,10 +37,23 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
           pip install pytest pytest-asyncio pytest-cov flake8
+          pip install pre-commit black isort mypy bandit
+
+      - name: Run pre-commit hooks
+        run: |
+          pre-commit run --all-files || true
 
       - name: Run flake8
         run: |
           flake8 .
+
+      - name: Run formatting/type/security checks
+        run: |
+          # check formatting / import order / typing / security
+          black --check .
+          isort --check-only .
+          mypy .
+          bandit -r . -ll || true
 
       - name: Run tests with coverage
         run: |

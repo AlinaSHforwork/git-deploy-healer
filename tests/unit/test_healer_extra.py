@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 import core.healer as core_healer
 
@@ -8,6 +9,7 @@ import core.healer as core_healer
 async def test_trigger_heal_no_healer_available(monkeypatch):
     # When Healer is not available in module, trigger_heal() should raise
     import importlib
+
     mod = importlib.import_module("api.healer")
     monkeypatch.setattr(mod, "Healer", None)
 

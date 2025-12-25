@@ -1,8 +1,9 @@
 # api/server.py
 import asyncio
-from contextlib import asynccontextmanager
 import os
-from fastapi import FastAPI, BackgroundTasks, Security, HTTPException
+from contextlib import asynccontextmanager
+
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Security
 from fastapi.security import APIKeyHeader
 from fastapi.templating import Jinja2Templates
 from loguru import logger
@@ -20,6 +21,7 @@ async def get_api_key(api_key: str = Security(api_key_header)):
     if api_key != os.getenv("API_KEY"):
         raise HTTPException(status_code=403, detail="Invalid API Key")
     return api_key
+
 
 # --- Core Component Initialization (lightweight) ---
 engine = ContainerEngine()
@@ -42,6 +44,7 @@ async def lifespan(app: FastAPI):
     # We avoid starting a long-running task during import in tests.
 
     yield
+
 
 # --- App Definition ---
 app = FastAPI(title="PyPaaS API", lifespan=lifespan)
@@ -68,6 +71,7 @@ async def trigger(background_tasks: BackgroundTasks = None):
     """
     try:
         import importlib
+
         healer_mod = importlib.import_module("api.healer")
         trigger_fn = getattr(healer_mod, "trigger_heal", None)
         if trigger_fn is None:

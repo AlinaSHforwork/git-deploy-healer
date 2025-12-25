@@ -2,9 +2,10 @@
 Unit tests for core.proxy_manager module.
 Tests Nginx proxy configuration management including config generation and reload.
 """
-import pytest
-from unittest.mock import Mock, patch, mock_open
 import subprocess
+from unittest.mock import Mock, mock_open, patch
+
+import pytest
 
 from core.proxy_manager import ProxyManager
 
@@ -14,7 +15,7 @@ def proxy_manager():
     """Fixture to create a ProxyManager instance."""
     return ProxyManager(
         nginx_config_path="/etc/nginx/sites-available",
-        nginx_enabled_path="/etc/nginx/sites-enabled"
+        nginx_enabled_path="/etc/nginx/sites-enabled",
     )
 
 
@@ -47,7 +48,7 @@ class TestProxyManagerInit:
         """Test initialization with custom paths."""
         manager = ProxyManager(
             nginx_config_path="/custom/nginx/available",
-            nginx_enabled_path="/custom/nginx/enabled"
+            nginx_enabled_path="/custom/nginx/enabled",
         )
         assert manager.nginx_config_path == "/custom/nginx/available"
         assert manager.nginx_enabled_path == "/custom/nginx/enabled"
@@ -57,7 +58,7 @@ class TestProxyManagerInit:
         """Test that initialization creates necessary directories."""
         ProxyManager(
             nginx_config_path="/new/path/available",
-            nginx_enabled_path="/new/path/enabled"
+            nginx_enabled_path="/new/path/enabled",
         )
         assert mock_mkdir.call_count >= 2
 
@@ -68,9 +69,7 @@ class TestGenerateConfig:
     def test_generate_config_basic(self, proxy_manager):
         """Test basic Nginx configuration generation."""
         config = proxy_manager.generate_config(
-            app_name="test-app",
-            port=8080,
-            domain="test-app.local"
+            app_name="test-app", port=8080, domain="test-app.local"
         )
 
         assert "server_name test-app.local" in config
@@ -85,7 +84,7 @@ class TestGenerateConfig:
             domain="test-app.local",
             ssl=True,
             ssl_certificate="/etc/ssl/cert.pem",
-            ssl_certificate_key="/etc/ssl/key.pem"
+            ssl_certificate_key="/etc/ssl/key.pem",
         )
 
         assert "listen 443 ssl" in config
@@ -100,8 +99,8 @@ class TestGenerateConfig:
             domain="test-app.local",
             custom_headers={
                 "X-Custom-Header": "value",
-                "X-Another-Header": "another-value"
-            }
+                "X-Another-Header": "another-value",
+            },
         )
 
         assert "proxy_set_header X-Custom-Header value" in config
@@ -110,10 +109,7 @@ class TestGenerateConfig:
     def test_generate_config_with_websocket_support(self, proxy_manager):
         """Test configuration with WebSocket support."""
         config = proxy_manager.generate_config(
-            app_name="test-app",
-            port=8080,
-            domain="test-app.local",
-            websocket=True
+            app_name="test-app", port=8080, domain="test-app.local", websocket=True
         )
 
         assert "proxy_http_version 1.1" in config
@@ -126,7 +122,9 @@ class TestWriteConfig:
 
     @patch('builtins.open', new_callable=mock_open)
     @patch('core.proxy_manager.Path.exists')
-    def test_write_config_success(self, mock_exists, mock_file, proxy_manager, sample_nginx_config):
+    def test_write_config_success(
+        self, mock_exists, mock_file, proxy_manager, sample_nginx_config
+    ):
         """Test successfully writing configuration to file."""
         mock_exists.return_value = False
 
@@ -138,7 +136,9 @@ class TestWriteConfig:
 
     @patch('builtins.open', new_callable=mock_open)
     @patch('core.proxy_manager.Path.exists')
-    def test_write_config_overwrite(self, mock_exists, mock_file, proxy_manager, sample_nginx_config):
+    def test_write_config_overwrite(
+        self, mock_exists, mock_file, proxy_manager, sample_nginx_config
+    ):
         """Test overwriting existing configuration."""
         mock_exists.return_value = True
 
@@ -147,7 +147,9 @@ class TestWriteConfig:
         mock_file().write.assert_called_once()
 
     @patch('core.proxy_manager.Path.exists')
-    def test_write_config_no_overwrite(self, mock_exists, proxy_manager, sample_nginx_config):
+    def test_write_config_no_overwrite(
+        self, mock_exists, proxy_manager, sample_nginx_config
+    ):
         """Test not overwriting existing configuration when overwrite=False."""
         mock_exists.return_value = True
 
@@ -156,7 +158,9 @@ class TestWriteConfig:
 
     @patch('builtins.open', new_callable=mock_open)
     @patch('core.proxy_manager.Path.exists')
-    def test_write_config_permission_error(self, mock_exists, mock_file, proxy_manager, sample_nginx_config):
+    def test_write_config_permission_error(
+        self, mock_exists, mock_file, proxy_manager, sample_nginx_config
+    ):
         """Test handling permission errors when writing config."""
         mock_exists.return_value = False
         mock_file.side_effect = PermissionError("Permission denied")
@@ -240,7 +244,9 @@ class TestRemoveConfig:
 
     @patch('core.proxy_manager.Path.unlink')
     @patch('core.proxy_manager.Path.exists')
-    def test_remove_config_only_available(self, mock_exists, mock_unlink, proxy_manager):
+    def test_remove_config_only_available(
+        self, mock_exists, mock_unlink, proxy_manager
+    ):
         """Test removing when only available config exists."""
         mock_exists.side_effect = [True, False]
 
@@ -267,9 +273,7 @@ class TestReloadNginx:
     def test_reload_nginx_failure(self, mock_run, proxy_manager):
         """Test handling of Nginx reload failure."""
         mock_run.return_value = Mock(
-            returncode=1,
-            stdout="",
-            stderr="nginx: configuration file test failed"
+            returncode=1, stdout="", stderr="nginx: configuration file test failed"
         )
 
         result = proxy_manager.reload_nginx()
@@ -302,7 +306,7 @@ class TestTestNginxConfig:
         mock_run.return_value = Mock(
             returncode=0,
             stdout="nginx: configuration file test is successful",
-            stderr=""
+            stderr="",
         )
 
         result = proxy_manager.test_nginx_config()
@@ -314,9 +318,7 @@ class TestTestNginxConfig:
     def test_test_config_invalid(self, mock_run, proxy_manager):
         """Test validating invalid Nginx configuration."""
         mock_run.return_value = Mock(
-            returncode=1,
-            stdout="",
-            stderr="nginx: [emerg] unexpected '}'"
+            returncode=1, stdout="", stderr="nginx: [emerg] unexpected '}'"
         )
 
         result = proxy_manager.test_nginx_config()
@@ -406,16 +408,20 @@ class TestIntegration:
     @patch('core.proxy_manager.Path.symlink_to')
     @patch('builtins.open', new_callable=mock_open)
     @patch('core.proxy_manager.Path.exists')
-    def test_full_deployment_workflow(self, mock_exists, mock_file, mock_symlink, mock_run, proxy_manager):
+    def test_full_deployment_workflow(
+        self, mock_exists, mock_file, mock_symlink, mock_run, proxy_manager
+    ):
         """Test complete workflow: generate, write, enable, reload."""
-        mock_exists.side_effect = [False, True, False]  # Not exists, then available, not enabled
+        mock_exists.side_effect = [
+            False,
+            True,
+            False,
+        ]  # Not exists, then available, not enabled
         mock_run.return_value = Mock(returncode=0)
 
         # Generate config
         config = proxy_manager.generate_config(
-            app_name="test-app",
-            port=8080,
-            domain="test-app.local"
+            app_name="test-app", port=8080, domain="test-app.local"
         )
 
         # Write config
@@ -455,12 +461,14 @@ class TestIntegration:
     @patch('core.proxy_manager.subprocess.run')
     @patch('builtins.open', new_callable=mock_open)
     @patch('core.proxy_manager.Path.exists')
-    def test_update_and_reload_workflow(self, mock_exists, mock_file, mock_run, proxy_manager):
+    def test_update_and_reload_workflow(
+        self, mock_exists, mock_file, mock_run, proxy_manager
+    ):
         """Test update configuration and reload workflow."""
         mock_exists.return_value = True
         mock_run.side_effect = [
             Mock(returncode=0),  # Test config
-            Mock(returncode=0)   # Reload
+            Mock(returncode=0),  # Reload
         ]
 
         # Update config

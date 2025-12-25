@@ -1,7 +1,9 @@
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
+
 from core.healer import ContainerHealer as Healer
+
 HealerError = Exception
 
 

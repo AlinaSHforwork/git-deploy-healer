@@ -1,5 +1,17 @@
 # core/engine.py
-from typing import Optional, Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+
+class Result:
+    def __init__(
+        self,
+        status: str,
+        host_port: Optional[str] = None,
+        error: Optional[str] = None,
+    ):
+        self.status = status
+        self.host_port = host_port
+        self.error = error
 
 
 class ContainerEngine:
@@ -9,6 +21,7 @@ class ContainerEngine:
     def _ensure_client(self):
         if self._client is None:
             import docker
+
             self._client = docker.from_env()
         return self._client
 
@@ -26,11 +39,13 @@ class ContainerEngine:
             containers = client.containers.list(all=False)
             apps = []
             for c in containers:
-                apps.append({
-                    "name": getattr(c, "name", None),
-                    "status": getattr(c, "status", None),
-                    "ports": getattr(c, "ports", None),
-                })
+                apps.append(
+                    {
+                        "name": getattr(c, "name", None),
+                        "status": getattr(c, "status", None),
+                        "ports": getattr(c, "ports", None),
+                    }
+                )
             return apps
         except Exception:
             return []
@@ -68,14 +83,15 @@ class ContainerEngine:
     ):
         client = self.client
         try:
-            container = client.containers.run(image_tag, detach=True, labels={"app": app_name})
-
-            class Result:
-                status = "ok"
-                host_port = getattr(container, "id", None)
-            return Result()
+            container = client.containers.run(
+                image_tag, detach=True, labels={"app": app_name}
+            )
+            return Result(
+                status="ok",
+                host_port=getattr(container, "id", None),
+            )
         except Exception as e:
-            class Result:
-                status = "failed"
-                error = str(e)
-            return Result()
+            return Result(
+                status="failed",
+                error=str(e),
+            )

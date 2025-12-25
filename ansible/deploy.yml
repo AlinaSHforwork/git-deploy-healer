@@ -7,7 +7,7 @@
   tasks:
     - name: Update apt cache and Install basic dependencies
       ansible.builtin.apt:
-        name: 
+        name:
           - python3-pip
           - git
           - nginx
@@ -45,7 +45,7 @@
         image: nginx:latest
         state: started
         # Crucial for Nginx to run on the host's network for dynamic routing
-        network_mode: host 
+        network_mode: host
         volumes:
           - /home/ubuntu/git-deploy-healer/nginx_confs:/etc/nginx/conf.d:rw
 
@@ -55,13 +55,13 @@
           [Unit]
           Description=PyPaaS Engine Service
           After=network.target docker.service
-          
+
           [Service]
           User=ubuntu
           WorkingDirectory=/home/ubuntu/git-deploy-healer
           ExecStart=/usr/bin/python3 -m uvicorn api.server:app --host 0.0.0.0 --port 8085
           Restart=always
-          
+
           [Install]
           WantedBy=multi-user.target
         dest: /etc/systemd/system/pypaas.service

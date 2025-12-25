@@ -1,13 +1,15 @@
 import os
-import time
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
 import requests
 
-pytestmark = pytest.mark.skipif(os.getenv("RUN_INTEGRATION") != "1",
-                                reason="Integration tests disabled (set RUN_INTEGRATION=1)")
+pytestmark = pytest.mark.skipif(
+    os.getenv("RUN_INTEGRATION") != "1",
+    reason="Integration tests disabled (set RUN_INTEGRATION=1)",
+)
 
 
 def _compose_file():
@@ -32,7 +34,9 @@ def test_healer_restarts_container():
     if not compose.exists():
         pytest.skip("docker-compose.test.yml not found")
 
-    service_name = os.getenv("HEALER_TARGET_SERVICE", "app")  # default service name 'app'
+    service_name = os.getenv(
+        "HEALER_TARGET_SERVICE", "app"
+    )  # default service name 'app'
     health_url = "http://localhost:8080/health"
 
     _up(compose)

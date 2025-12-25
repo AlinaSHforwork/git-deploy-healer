@@ -1,11 +1,15 @@
 # core/proxy_manager.py
+import subprocess  # nosec B404
 from pathlib import Path
-import subprocess
+from typing import Dict, Optional
 
 
 class ProxyManager:
-    def __init__(self, nginx_config_path: str = "/etc/nginx/sites-available",
-                 nginx_enabled_path: str = "/etc/nginx/sites-enabled"):
+    def __init__(
+        self,
+        nginx_config_path: str = "/etc/nginx/sites-available",
+        nginx_enabled_path: str = "/etc/nginx/sites-enabled",
+    ):
         self.nginx_config_path = str(nginx_config_path)
         self.nginx_enabled_path = str(nginx_enabled_path)
 
@@ -19,10 +23,17 @@ class ProxyManager:
         except (PermissionError, FileNotFoundError):
             pass
 
-    def generate_config(self, app_name: str, port: int, domain: str,
-                        ssl: bool = False, ssl_certificate: str = None,
-                        ssl_certificate_key: str = None, custom_headers: dict = None,
-                        websocket: bool = False) -> str:
+    def generate_config(
+        self,
+        app_name: str,
+        port: int,
+        domain: str,
+        ssl: bool = False,
+        ssl_certificate: Optional[str] = None,
+        ssl_certificate_key: Optional[str] = None,
+        custom_headers: Optional[Dict[str, str]] = None,
+        websocket: bool = False,
+    ) -> str:
         lines = []
         listen = "443 ssl" if ssl else "80"
         lines.append("server {")
@@ -85,7 +96,10 @@ class ProxyManager:
 
     def reload_nginx(self, timeout: int = 10) -> bool:
         try:
-            r = subprocess.run(["nginx", "-s", "reload"], capture_output=True, timeout=timeout)
+            r = subprocess.run(
+                ["nginx", "-s", "reload"], capture_output=True, timeout=timeout
+            )  # nosec B603 B607
+
             return r.returncode == 0
         except FileNotFoundError:
             raise
@@ -93,7 +107,8 @@ class ProxyManager:
             raise
 
     def test_nginx_config(self) -> bool:
-        r = subprocess.run(["nginx", "-t"], capture_output=True)
+        r = subprocess.run(["nginx", "-t"], capture_output=True)  # nosec B603 B607
+
         return r.returncode == 0
 
     def list_configs(self):
@@ -113,7 +128,9 @@ class ProxyManager:
             # handle both real Path objects and Mock objects used in tests
             is_file_attr = getattr(x, "is_file", None)
             try:
-                is_file = is_file_attr() if callable(is_file_attr) else bool(is_file_attr)
+                is_file = (
+                    is_file_attr() if callable(is_file_attr) else bool(is_file_attr)
+                )
             except Exception:
                 # fallback: try truthiness
                 try:

@@ -169,4 +169,3 @@ Integrated via GitHub Actions (`.github/workflows/ci.yml`):
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
-

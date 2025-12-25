@@ -1,7 +1,9 @@
 from unittest.mock import MagicMock
+
 import pytest
 
 from core.engine import ContainerEngine as DockerManager
+
 DockerError = Exception
 
 
@@ -21,6 +23,7 @@ def test_build_image_failure(monkeypatch):
 
     def raise_exc(*a, **k):
         raise Exception("build failed")
+
     fake_client.images.build.side_effect = raise_exc
     monkeypatch.setattr(dm, "client", fake_client)
     with pytest.raises(DockerError):

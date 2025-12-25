@@ -2,8 +2,8 @@
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-import pytest
 
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -12,14 +12,21 @@ if str(ROOT) not in sys.path:
 # httpx AsyncClient compatibility shim for tests (single definition)
 try:
     import httpx as _httpx
+
     ASGITransport = getattr(_httpx, "ASGITransport", None)
     _orig_AsyncClient = getattr(_httpx, "AsyncClient", None)
     if _orig_AsyncClient is not None:
+
         class AsyncClient(_orig_AsyncClient):
             def __init__(self, *args, app=None, **kwargs):
-                if app is not None and ASGITransport is not None and "transport" not in kwargs:
+                if (
+                    app is not None
+                    and ASGITransport is not None
+                    and "transport" not in kwargs
+                ):
                     kwargs["transport"] = ASGITransport(app=app)
                 super().__init__(*args, **kwargs)
+
         _httpx.AsyncClient = AsyncClient
 except Exception:
     pass
@@ -46,7 +53,7 @@ def patch_docker_and_engine():
     fake_engine.deploy.return_value = fake_deploy_result
 
     # Patch docker.from_env and docker.APIClient to avoid socket access
-    with patch("docker.from_env", return_value=fake_client), \
-         patch("docker.APIClient", return_value=MagicMock()), \
-         patch("core.engine.ContainerEngine", return_value=fake_engine):
+    with patch("docker.from_env", return_value=fake_client), patch(
+        "docker.APIClient", return_value=MagicMock()
+    ), patch("core.engine.ContainerEngine", return_value=fake_engine):
         yield

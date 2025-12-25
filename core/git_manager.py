@@ -1,12 +1,15 @@
 # core/git_manager.py
-from pathlib import Path
 import shutil
+import tempfile
+from pathlib import Path
+from typing import Optional
+
 import git
 
 
 class GitManager:
-    def __init__(self, base_path: str = "/tmp/repos"):
-        self.base_path = str(base_path).rstrip("/")
+    def __init__(self, base_path: Optional[str] = None):
+        self.base_path = str(base_path or Path(tempfile.gettempdir()) / "repos")
         Path(self.base_path).mkdir(parents=True, exist_ok=True)
 
     def get_repository_path(self, app_name: str) -> str:

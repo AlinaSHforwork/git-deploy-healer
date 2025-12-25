@@ -17,6 +17,7 @@ async def test_health_endpoint():
 async def test_trigger_endpoint(monkeypatch):
     # mock healer trigger
     from api import healer as healer_module
+
     monkeypatch.setattr(healer_module, "trigger_heal", lambda: None)
 
     async with AsyncClient(app=app, base_url="http://test") as ac:

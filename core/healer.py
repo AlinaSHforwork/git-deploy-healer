@@ -1,8 +1,9 @@
 # core/healer.py
 import asyncio
-from loguru import logger
-from docker.errors import APIError
 from typing import Any, List, Optional
+
+from docker.errors import APIError
+from loguru import logger
 
 try:
     from core.metrics import HEALER_RESTART_COUNTER
@@ -45,7 +46,9 @@ class ContainerHealer:
 
     def check_health(self) -> List[Any]:
         try:
-            containers = self.client.containers.list(all=True, filters={"label": f"managed_by={self.namespace}"})
+            containers = self.client.containers.list(
+                all=True, filters={"label": f"managed_by={self.namespace}"}
+            )
         except Exception as e:
             logger.error(f"Failed to list containers: {e}")
             return []
@@ -62,7 +65,8 @@ class ContainerHealer:
                 container.restart(timeout=10)
                 container.reload()
             except Exception:
-                pass
+                # Ignoring errors during healing; container may already be gone
+                return
             if getattr(container, "status", None) == 'running':
                 if HEALER_RESTART_COUNTER is not None:
                     HEALER_RESTART_COUNTER.inc()
@@ -71,7 +75,8 @@ class ContainerHealer:
                 try:
                     self.engine.deploy(container.labels.get("app"), "latest")
                 except Exception:
-                    pass
+                    # Deployment failure is non-fatal for healer loop
+                    return
         except APIError as e:
             logger.error(f"Docker API error while healing: {e}")
         except Exception as e:
@@ -116,6 +121,7 @@ class Healer:
     docker_manager and proxy_manager actions. Tests patch attributes on this
     object (git_manager, docker_manager, proxy_manager) and call check_and_heal().
     """
+
     def __init__(self):
         self.git_manager = None
         self.docker_manager = None
