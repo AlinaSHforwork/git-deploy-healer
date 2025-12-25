@@ -2,7 +2,6 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager
-from typing import Optional
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Security
 from fastapi.security import APIKeyHeader
@@ -65,8 +64,8 @@ async def health():
     return {"status": "ok"}
 
 
-@app.post("/trigger", response_model=None)
-async def endpoint(background_tasks: Optional[BackgroundTasks] = None):
+@app.post("/trigger")
+def trigger(background_tasks: BackgroundTasks):
     """
     Trigger endpoint used by tests. It calls api.healer.trigger_heal() if available.
     """
