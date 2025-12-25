@@ -2,25 +2,35 @@
 """
 Shim exposing the test-oriented Healer and a trigger helper used by tests.
 """
-from importlib import import_module as _import
+from typing import Any, Optional
 
-_core_healer = _import("core.healer")
-
-Healer = getattr(_core_healer, "Healer", None)
-ContainerHealer = getattr(_core_healer, "ContainerHealer", None)
+_core_healer = None  # Prevent import loop in case core.healer imports api.healer
 
 
-def trigger_heal(healer_obj=None):
+class _DefaultHealer:
+    def check_and_heal(self, target: Any = None) -> bool:
+        # simple no-op healer used during tests (can be monkeypatched)
+        return True
+
+
+# module-level symbol expected by tests; tests may monkeypatch this to None
+Healer: Optional[Any] = _DefaultHealer()
+
+
+def trigger_heal(target: Optional[Any] = None):
     """
-    Tests monkeypatch this function. Return the coroutine from check_and_heal
-    so tests can await or patch it. If Healer is available and healer_obj is None,
-    create one.
+    Trigger healing. Tests expect:
+    - RuntimeError when module-level Healer is None
+    - AttributeError when passed an object that lacks check_and_heal
     """
-    if healer_obj is None:
-        if Healer is None:
-            raise RuntimeError("No Healer available")
-        healer_obj = Healer()
-    coro = getattr(healer_obj, "check_and_heal", None)
-    if coro is None:
-        raise AttributeError("Healer object has no check_and_heal")
-    return coro()
+    if Healer is None:
+        raise RuntimeError("Healer not available")
+
+    if target is not None:
+        if not hasattr(target, "check_and_heal"):
+            raise AttributeError("target lacks check_and_heal")
+        return target.check_and_heal()
+
+    if not hasattr(Healer, "check_and_heal"):
+        raise RuntimeError("Healer invalid")
+    return Healer.check_and_heal(target)

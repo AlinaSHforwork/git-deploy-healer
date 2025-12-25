@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="1" failures="0" skipped="0" tests="1" time="2.515" timestamp="2025-12-25T10:49:20.298176+00:00" hostname="serverterminal"><testcase classname="" name="tests.unit.test_api_endpoints" time="0.000"><error message="collection failure">tests/unit/test_api_endpoints.py:5: in &lt;module&gt;
+    from api.server import app  # assume app is FastAPI instance
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+api/__init__.py:5: in &lt;module&gt;
+    from . import server
+api/server.py:68: in &lt;module&gt;
+    @app.post("/trigger")
+     ^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/fastapi/routing.py:956: in decorator
+    self.add_api_route(
+venv/lib/python3.12/site-packages/fastapi/routing.py:895: in add_api_route
+    route = route_class(
+venv/lib/python3.12/site-packages/fastapi/routing.py:525: in __init__
+    self.dependant = get_dependant(path=self.path_format, call=self.endpoint)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/fastapi/dependencies/utils.py:261: in get_dependant
+    type_annotation, depends, param_field = analyze_param(
+venv/lib/python3.12/site-packages/fastapi/dependencies/utils.py:442: in analyze_param
+    field = create_response_field(
+venv/lib/python3.12/site-packages/fastapi/utils.py:101: in create_response_field
+    raise fastapi.exceptions.FastAPIError(
+E   fastapi.exceptions.FastAPIError: Invalid args for response field! Hint: check that typing.Optional[fastapi.background.BackgroundTasks] is a valid Pydantic field type. If you are using a return type annotation that is not a valid Pydantic field (e.g. Union[Response, dict, None]) you can disable generating the response model from the type annotation with the path operation decorator parameter response_model=None. Read more: https://fastapi.tiangolo.com/tutorial/response-model/</error></testcase></testsuite></testsuites>

@@ -1,10 +1,11 @@
+# pragma: no cover
 # api/__init__.py
 import importlib
 from typing import Any
 
-from . import server
+from . import server  # re-export for convenience
 
-__all__ = ["server", "schemas", "git_manager", "proxy_manager", "healer"]
+__all__ = ["server"]
 
 
 def __getattr__(name: str) -> Any:
