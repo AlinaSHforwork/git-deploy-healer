@@ -65,7 +65,7 @@ async def health():
     return {"status": "ok"}
 
 
-@app.post("/trigger")
+@app.post("/trigger", response_model=None)
 async def endpoint(background_tasks: Optional[BackgroundTasks] = None):
     """
     Trigger endpoint used by tests. It calls api.healer.trigger_heal() if available.

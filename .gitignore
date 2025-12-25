@@ -17,3 +17,6 @@ nginx_confs/
 .vscode/
 .idea/
 .DS_Store
+
+pytest.xml
+coverage.xml
