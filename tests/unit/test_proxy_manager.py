@@ -2,6 +2,7 @@
 Unit tests for core.proxy_manager module.
 Tests Nginx proxy configuration management including config generation and reload.
 """
+
 import subprocess
 from unittest.mock import Mock, mock_open, patch
 

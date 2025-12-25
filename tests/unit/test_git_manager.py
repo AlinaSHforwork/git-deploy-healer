@@ -2,6 +2,7 @@
 Unit tests for core.git_manager module.
 Tests Git operations including cloning, pulling, and repository management.
 """
+
 from unittest.mock import Mock, patch
 
 import git

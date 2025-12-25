@@ -53,7 +53,9 @@ def patch_docker_and_engine():
     fake_engine.deploy.return_value = fake_deploy_result
 
     # Patch docker.from_env and docker.APIClient to avoid socket access
-    with patch("docker.from_env", return_value=fake_client), patch(
-        "docker.APIClient", return_value=MagicMock()
-    ), patch("core.engine.ContainerEngine", return_value=fake_engine):
+    with (
+        patch("docker.from_env", return_value=fake_client),
+        patch("docker.APIClient", return_value=MagicMock()),
+        patch("core.engine.ContainerEngine", return_value=fake_engine),
+    ):
         yield
