@@ -56,6 +56,11 @@ app.mount("/metrics", metrics_app)
 templates = Jinja2Templates(directory="templates")
 
 
+@app.get("/")
+def root():
+    return {"message": "git-deploy-healer API is running"}
+
+
 @app.get("/health")
 async def health():
     """

@@ -1,0 +1,13 @@
+deployment_mode: local
+
+database:
+  url: ${DATABASE_URL}
+
+api:
+  key: ${API_KEY}
+  github_webhook_secret: ${GITHUB_WEBHOOK_SECRET}
+
+docker_registry:
+  url: ${DOCKER_REGISTRY_URL}
+  username: ${DOCKER_REGISTRY_USERNAME}
+  password: ${DOCKER_REGISTRY_PASSWORD}

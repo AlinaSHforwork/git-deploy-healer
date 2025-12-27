@@ -1,0 +1,14 @@
+deployment_mode: aws
+
+# AWS SSM parameter names
+database:
+  url: /pypaas/DATABASE_URL
+
+api:
+  key: /pypaas/API_KEY
+  github_webhook_secret: /pypaas/GITHUB_WEBHOOK_SECRET
+
+docker_registry:
+  url: /pypaas/DOCKER_REGISTRY_URL
+  username: /pypaas/DOCKER_REGISTRY_USERNAME
+  password: /pypaas/DOCKER_REGISTRY_PASSWORD
