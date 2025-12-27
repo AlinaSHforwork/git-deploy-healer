@@ -59,15 +59,26 @@ flowchart TD
     G -->|Routes Traffic| H[Running Containers]
     I[Healer Daemon] -->|Periodic Check| J[Detect Unhealthy Containers]
     J -->|Restart/Recreate| F
+    K[ALB] -->|Forward to 8085| L[ASG EC2 Instances]
+    L --> B
 
-    subgraph LocalHost [Local/Cloud Host]
-        B C D E F G H I J
+    subgraph LocalHost
+        B
+        C
+        D
+        E
+        F
+        G
+        H
+        I
+        J
     end
 
-    subgraph Cloud [Cloud Infrastructure]
-        K[ALB] -->|Forward to 8085| L[ASG EC2 Instances]
-        L --> B
+    subgraph Cloud
+        K
+        L
     end
+
 ```
 
 ---
@@ -234,3 +245,4 @@ Secrets stored in repo settings:
 ## **License**
 
 MIT License — see [LICENSE](LICENSE).
+
