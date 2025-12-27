@@ -1,3 +1,44 @@
+# Secrets Setup
+
+This project supports two secrets modes: `local` and `aws`.
+
+Local (recommended for development)
+
+1. Copy `.env.example` to `.env`:
+
+```bash
+cp .env.example .env
+# edit .env and fill values
+```
+
+2. Use the `SecretsManager` in code:
+
+```python
+from core.secrets_manager import SecretsManager
+sm = SecretsManager('local')
+print(sm.get_secret('API_KEY'))
+```
+
+AWS (optional)
+
+1. Set `DEPLOYMENT_MODE=aws` in env or pass `SecretsManager('aws')`.
+2. Ensure the IAM permissions for `secretsmanager:GetSecretValue`.
+
+Testing examples
+
+Local mode:
+
+```bash
+cp .env.example .env
+python -c "from core.secrets_manager import SecretsManager; print(SecretsManager('local').get_secret('API_KEY'))"
+```
+
+AWS mode (requires credentials):
+
+```bash
+export DEPLOYMENT_MODE=aws
+python -c "from core.secrets_manager import SecretsManager; print(SecretsManager('aws').get_secret('API_KEY'))"
+```
 # Secrets Setup Guide
 
 This project supports two modes for managing secrets:

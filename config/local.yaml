@@ -1,11 +1,12 @@
+# Local configuration used during development
 deployment_mode: local
-
 database:
   url: ${DATABASE_URL}
+secrets:
+  github_webhook_secret: ${GITHUB_WEBHOOK_SECRET}
 
 api:
   key: ${API_KEY}
-  github_webhook_secret: ${GITHUB_WEBHOOK_SECRET}
 
 docker_registry:
   url: ${DOCKER_REGISTRY_URL}

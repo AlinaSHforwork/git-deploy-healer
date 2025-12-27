@@ -1,12 +1,26 @@
+"""Universal SecretsManager supporting local (.env) and AWS Secrets Manager.
+
+The class intentionally avoids hard failures when optional deps are missing so tests
+and local development remain simple.
+"""
+from __future__ import annotations
+
 import os
 from pathlib import Path
 from typing import Dict, Optional
 
 from dotenv import load_dotenv
+from loguru import logger
 
 try:
-    import boto3
-except Exception:
+    load_dotenv()
+except Exception as e:  # pragma: no cover
+    logger.warning(f"Failed to load .env file: {e}")
+
+
+try:  # optional import for AWS mode
+    import boto3  # type: ignore
+except Exception:  # pragma: no cover - optional
     boto3 = None  # type: ignore
 
 

@@ -1,4 +1,9 @@
+# AWS configuration example
 deployment_mode: aws
+aws_region: us-east-1
+secrets:
+  api_key_secret_name: git-deploy-healer/API_KEY
+  github_webhook_secret_name: git-deploy-healer/GITHUB_WEBHOOK_SECRET
 
 # AWS SSM parameter names
 database:
