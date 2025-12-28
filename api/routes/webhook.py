@@ -7,6 +7,8 @@ import os
 from typing import Optional, cast
 
 from fastapi import APIRouter, Header, HTTPException, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 router = APIRouter()
 
@@ -30,7 +32,11 @@ def _verify_signature(
     return hmac.compare_digest(digest, sig)
 
 
+limiter = Limiter(key_func=get_remote_address)
+
+
 @router.post("/webhook")
+@limiter.limit("5/minute")
 async def webhook(request: Request, x_hub_signature_256: Optional[str] = Header(None)):
     body = await request.body()
     secret = os.getenv("GITHUB_WEBHOOK_SECRET")

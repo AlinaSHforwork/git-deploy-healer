@@ -4,10 +4,15 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Security
+from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 from fastapi.templating import Jinja2Templates
 from loguru import logger
 from prometheus_client import make_asgi_app
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 
 # local imports (lazy imports for heavy modules are done inside functions)
 from core.engine import ContainerEngine
@@ -48,6 +53,24 @@ async def lifespan(app: FastAPI):
 
 # --- App Definition ---
 app = FastAPI(title="PyPaaS API", lifespan=lifespan)
+
+# --- Rate Limiting (SlowAPI) ---
+
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+def rate_limit_handler(request, exc):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded"},
+    )
+
+
+app.add_middleware(SlowAPIMiddleware)
+
 
 # Mount Prometheus Metrics Endpoint
 metrics_app = make_asgi_app()

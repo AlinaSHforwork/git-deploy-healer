@@ -11,6 +11,7 @@ class Result:
     ):
         self.status = status
         self.host_port = host_port
+        self.container_id = host_port
         self.error = error
 
 
