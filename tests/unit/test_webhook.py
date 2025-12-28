@@ -20,6 +20,18 @@ def client():
     return TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def run_background_tasks_immediately(monkeypatch):
+    def immediate_add_task(self, func, *args, **kwargs):
+        func(*args, **kwargs)
+
+    monkeypatch.setattr(
+        "fastapi.BackgroundTasks.add_task",
+        immediate_add_task,
+        raising=False,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Signature helper
 # ---------------------------------------------------------------------------
@@ -73,7 +85,7 @@ def test_webhook_invalid_signature(client, mock_secret):
     r = client.post(
         "/webhook",
         data=b"{}",
-        headers={"x-hub-signature-256": "sha256=bad"},
+        headers={"X-Hub-Signature-256": "sha256=bad"},
     )
     assert r.status_code == 403
 
@@ -86,7 +98,6 @@ def test_webhook_missing_signature(client, mock_secret):
 def test_webhook_missing_secret(client, monkeypatch):
     monkeypatch.delenv("GITHUB_WEBHOOK_SECRET", raising=False)
     r = client.post("/webhook", content=b"{}")
-    # Missing secret → verify_signature returns False → 403
     assert r.status_code == 403
 
 
@@ -95,9 +106,8 @@ def test_webhook_invalid_json(client, mock_secret):
     r = client.post(
         "/webhook",
         content=b"not-json",
-        headers={"x-hub-signature-256": sig},
+        headers={"X-Hub-Signature-256": sig},
     )
-    # Invalid JSON → payload = {} → background task returns early → 200
     assert r.status_code == 200
 
 
@@ -107,9 +117,8 @@ def test_webhook_missing_repo(client, mock_secret):
     r = client.post(
         "/webhook",
         content=body,
-        headers={"x-hub-signature-256": sig},
+        headers={"X-Hub-Signature-256": sig},
     )
-    # Missing repo info → background task returns early → 200
     assert r.status_code == 200
 
 
@@ -117,7 +126,6 @@ def test_webhook_deploy_exception(client, mock_secret, monkeypatch):
     body = b'{"repository":{"name":"app"}}'
     sig = _sig(body, "supersecret")
 
-    # Force GitManager() to raise
     monkeypatch.setattr(
         "api.routes.webhook.GitManager",
         MagicMock(side_effect=Exception("fail")),
@@ -126,9 +134,8 @@ def test_webhook_deploy_exception(client, mock_secret, monkeypatch):
     r = client.post(
         "/webhook",
         content=body,
-        headers={"x-hub-signature-256": sig},
+        headers={"X-Hub-Signature-256": sig},
     )
-    # Exceptions inside background task are swallowed → 200
     assert r.status_code == 200
 
 
@@ -136,15 +143,84 @@ def test_webhook_valid_signature(client, mock_secret, monkeypatch):
     body = b'{"repository":{"name":"app"}}'
     sig = _sig(body, "supersecret")
 
-    # Mock heavy components
     monkeypatch.setattr("api.routes.webhook.GitManager", MagicMock())
     monkeypatch.setattr("api.routes.webhook.ContainerEngine", MagicMock())
 
     r = client.post(
         "/webhook",
         content=body,
-        headers={"x-hub-signature-256": sig},
+        headers={"X-Hub-Signature-256": sig},
     )
 
     assert r.status_code == 200
     assert r.json() == {"status": "accepted"}
+
+
+# ---------------------------------------------------------------------------
+# Additional tests for full coverage of _deploy_task
+# ---------------------------------------------------------------------------
+
+
+def test_webhook_proxy_failure(client, mock_secret, monkeypatch):
+    body = b'{"repository":{"name":"app"}}'
+    sig = _sig(body, "supersecret")
+
+    monkeypatch.setattr("api.routes.webhook.GitManager", MagicMock())
+
+    mock_engine = MagicMock()
+    mock_engine.deploy.return_value = MagicMock(status="ok", host_port=None)
+    monkeypatch.setattr(
+        "api.routes.webhook.ContainerEngine", MagicMock(return_value=mock_engine)
+    )
+
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "core.proxy_manager",
+        MagicMock(ProxyManager=lambda: (_ for _ in ()).throw(Exception("proxy fail"))),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "core.network",
+        MagicMock(PortManager=lambda: MagicMock()),
+    )
+
+    r = client.post(
+        "/webhook",
+        content=body,
+        headers={"X-Hub-Signature-256": sig},
+    )
+
+    assert r.status_code == 200
+
+
+def test_webhook_build_failure(client, mock_secret, monkeypatch):
+    body = b'{"repository":{"name":"app"}}'
+    sig = _sig(body, "supersecret")
+
+    monkeypatch.setattr("api.routes.webhook.GitManager", MagicMock())
+
+    mock_engine = MagicMock()
+    mock_engine.build_image.side_effect = Exception("build fail")
+    mock_engine.deploy.return_value = MagicMock(status="ok", host_port=None)
+    monkeypatch.setattr(
+        "api.routes.webhook.ContainerEngine", MagicMock(return_value=mock_engine)
+    )
+
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "core.proxy_manager",
+        MagicMock(ProxyManager=lambda: MagicMock()),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "core.network",
+        MagicMock(PortManager=lambda: MagicMock()),
+    )
+
+    r = client.post(
+        "/webhook",
+        content=body,
+        headers={"X-Hub-Signature-256": sig},  # ← FIXED
+    )
+
+    assert r.status_code == 200
