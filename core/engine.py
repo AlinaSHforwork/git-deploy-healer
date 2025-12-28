@@ -81,15 +81,37 @@ class ContainerEngine:
         image_tag: str,
         repo_path: Optional[str] = None,
         container_port: Optional[int] = None,
+        environment: Optional[dict] = None,
     ):
         client = self.client
         try:
-            container = client.containers.run(
-                image_tag, detach=True, labels={"app": app_name}
-            )
+            run_kwargs = {
+                "image": image_tag,
+                "detach": True,
+                "labels": {"app": app_name},
+            }
+            if environment:
+                run_kwargs["environment"] = environment
+            if container_port is not None:
+                # Publish container port to a random host port (None -> random) or same port
+                try:
+                    run_kwargs["ports"] = {f"{container_port}/tcp": None}
+                except Exception:  # nosec
+                    pass
+
+            # Use client.containers.run signature compatible kwargs
+            container = client.containers.run(**run_kwargs)
+            # collect published ports if available
+            host_port = None
+            try:
+                ports = getattr(container, "ports", None)
+                host_port = ports
+            except Exception:
+                host_port = getattr(container, "id", None)
+
             return Result(
                 status="ok",
-                host_port=getattr(container, "id", None),
+                host_port=host_port,
             )
         except Exception as e:
             return Result(

@@ -3,7 +3,7 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Security
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Security
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 from fastapi.templating import Jinja2Templates
@@ -13,6 +13,8 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
+
+from api.middleware.auth import require_api_key
 
 # local imports (lazy imports for heavy modules are done inside functions)
 from core.engine import ContainerEngine
@@ -92,7 +94,7 @@ async def health():
     return {"status": "ok"}
 
 
-@app.post("/trigger")
+@app.post("/trigger", response_model=None, dependencies=[Depends(require_api_key)])
 def trigger(background_tasks: BackgroundTasks):
     """
     Trigger endpoint used by tests. It calls api.healer.trigger_heal() if available.
@@ -107,6 +109,7 @@ def trigger(background_tasks: BackgroundTasks):
         coro = trigger_fn()
         if asyncio.iscoroutine(coro):
             if background_tasks is not None:
+                # schedule the coroutine in the background
                 background_tasks.add_task(asyncio.create_task, coro)
             else:
                 asyncio.create_task(coro)

@@ -26,9 +26,9 @@ COPY . .
 # Expose port
 EXPOSE 8085
 
-# Healthcheck
+# Healthcheck: use python to avoid installing curl in slim image
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8085/ || exit 1
+  CMD ["python", "-c", "import sys,urllib.request as u;\ntry:\n r=u.urlopen('http://localhost:8085/', timeout=5);\n sys.exit(0 if r.getcode()==200 else 1)\nexcept Exception:\n sys.exit(1)"]
 
 # Run as non-root
 CMD ["uvicorn", "api.server:app", "--host", "0.0.0.0", "--port", "8085"]
