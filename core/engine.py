@@ -83,6 +83,8 @@ class ContainerEngine:
         container_port: Optional[int] = None,
         environment: Optional[dict] = None,
     ):
+        from core.metrics import ACTIVE_CONTAINERS_GAUGE
+
         client = self.client
         try:
             run_kwargs = {
@@ -102,6 +104,12 @@ class ContainerEngine:
             # Use client.containers.run signature compatible kwargs
             container = client.containers.run(**run_kwargs)
             # collect published ports if available
+            try:
+                running = len(client.containers.list(filters={"status": "running"}))
+                ACTIVE_CONTAINERS_GAUGE.set(running)
+            except Exception:  # nosec
+                pass
+
             host_port = None
             try:
                 ports = getattr(container, "ports", None)

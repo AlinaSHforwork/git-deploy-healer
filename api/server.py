@@ -15,6 +15,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 
 from api.middleware.auth import require_api_key
+from api.routes.webhook import router as webhook_router
 
 # local imports (lazy imports for heavy modules are done inside functions)
 from core.engine import ContainerEngine
@@ -40,17 +41,30 @@ proxy_manager = ProxyManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize metrics or other startup tasks if needed
     try:
         current_apps = engine.list_apps()
         logger.info(f"Observability initialized. Active apps: {len(current_apps)}")
     except Exception as e:
         logger.warning(f"Could not initialize metrics: {e}")
 
-    # Start a background healer only if tests or runtime require it.
-    # We avoid starting a long-running task during import in tests.
+    # START HEALER DAEMON
+    healer_task = None
+    if os.getenv("ENABLE_HEALER", "true").lower() == "true":
+        from core.healer import ContainerHealer
+
+        healer = ContainerHealer(interval=30, engine=engine)
+        healer_task = asyncio.create_task(healer.start())
+        logger.info("Healer daemon started")
 
     yield
+
+    # Cleanup
+    if healer_task:
+        healer_task.cancel()
+        try:
+            await healer_task
+        except asyncio.CancelledError:
+            pass
 
 
 # --- App Definition ---
@@ -117,3 +131,6 @@ def trigger(background_tasks: BackgroundTasks):
     except Exception as e:
         logger.exception(f"Trigger failed: {e}")
         return {"message": "Trigger error"}
+
+
+app.include_router(webhook_router)

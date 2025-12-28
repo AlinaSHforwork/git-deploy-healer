@@ -12,27 +12,16 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def _compose_file():
-    return Path("docker-compose.test.yml")
-
-
-def _up(compose):
-    subprocess.check_call(["docker", "compose", "-f", str(compose), "up", "-d"])
-
-
-def _down(compose):
-    subprocess.check_call(["docker", "compose", "-f", str(compose), "down"])
-
-
 def test_webhook_triggers_deploy():
-    compose = _compose_file()
+    compose = Path("docker-compose.test.yml")
     if not compose.exists():
         pytest.skip("docker-compose.test.yml not found")
 
-    _up(compose)
+    subprocess.check_call(["docker", "compose", "-f", str(compose), "up", "-d"])
     try:
         url = "http://localhost:8080/webhook"
-        payload = {"ref": "refs/heads/main", "repository": {"name": "example"}}
+        payload = {"repository": {"name": "example"}}
+
         for _ in range(20):
             try:
                 r = requests.post(url, json=payload, timeout=2)
@@ -40,6 +29,7 @@ def test_webhook_triggers_deploy():
                     return
             except Exception:
                 time.sleep(1)
+
         pytest.fail("Webhook endpoint did not accept deploy request")
     finally:
-        _down(compose)
+        subprocess.check_call(["docker", "compose", "-f", str(compose), "down"])
