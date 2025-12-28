@@ -164,6 +164,76 @@ resource "aws_iam_role_policy_attachment" "pypaas_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+resource "aws_launch_template" "pypaas_lt" {
+  name          = "pypaas-launch-template"
+  image_id      = var.ami_id
+  instance_type = var.instance_type
+  key_name      = aws_key_pair.deployer_key.key_name
+  iam_instance_profile { name = aws_iam_instance_profile.pypaas_profile.name }
+  vpc_security_group_ids = [aws_security_group.pypaas_sg.id]
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
+  }
+
+  # REPLACE THE EMPTY user_data WITH THIS:
+  user_data = base64encode(<<EOF
+#!/bin/bash
+set -e
+
+# Update system
+apt-get update
+apt-get install -y docker.io python3-pip git
+
+# Add ubuntu to docker group
+usermod -aG docker ubuntu
+
+# Install docker-compose
+curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+
+# Create app directory
+mkdir -p /opt/pypaas
+cd /opt/pypaas
+
+# Clone repo
+git clone https://github.com/AlinaSHforwork/git-deploy-healer.git .
+
+# Create .env
+cp .env.example .env
+# TODO: Populate .env with secrets from Parameter Store
+
+# Install Python deps
+pip3 install -r requirements.txt
+
+# Create systemd service
+cat > /etc/systemd/system/pypaas.service <<'SERVICE'
+[Unit]
+Description=PyPaaS Service
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/pypaas
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/local/bin/uvicorn api.server:app --host 0.0.0.0 --port 8085
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+# Start service
+systemctl daemon-reload
+systemctl enable pypaas
+systemctl start pypaas
+EOF
+  )
+}
+
 resource "aws_iam_instance_profile" "pypaas_profile" {
   name = "pypaas-ec2-profile"
   role = aws_iam_role.pypaas_ec2_role.name

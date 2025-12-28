@@ -1,23 +1,34 @@
-docker==7.0.0
+# requirements.txt
+# Core
+fastapi==0.110.0
+uvicorn==0.27.0
+starlette
+pydantic==2.5.3
+
+# HTTP & Async
+httpx==0.27.0
+aiofiles==23.1.0
+python-multipart==0.0.6
 requests==2.31.0
 urllib3<2
-pydantic==2.5.3
-loguru==0.7.2
-uvicorn==0.27.0
-python-multipart==0.0.6
+
+# Docker & Git
+docker==7.0.0
 GitPython==3.1.40
+
+# Observability
+loguru==0.7.2
+prometheus-client==0.20.0
+
+# Security & Utils
+python-dotenv==1.0.1
 jinja2==3.1.2
+slowapi
+
+# Development
 flake8
 pytest
-prometheus-client==0.20.0
-python-dotenv==1.0.1
-httpx>=0.23.0
-aiofiles==23.1.0
 pytest-asyncio==0.21.0
 pytest-mock==3.10.0
 pytest-cov==4.1.0
 types-requests
-slowapi
-fastapi==0.110.0
-starlette
-httpx==0.27.0

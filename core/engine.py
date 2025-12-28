@@ -90,7 +90,7 @@ class ContainerEngine:
             run_kwargs = {
                 "image": image_tag,
                 "detach": True,
-                "labels": {"app": app_name},
+                "labels": {"app": app_name, "managed_by": "pypaas"},
             }
             if environment:
                 run_kwargs["environment"] = environment

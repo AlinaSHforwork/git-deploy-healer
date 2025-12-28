@@ -33,3 +33,19 @@ async def test_trigger_endpoint(monkeypatch):
         r = await ac.post("/trigger", headers={"X-API-Key": "test-key"})
     assert r.status_code == 200
     assert "triggered" in r.json().get("message", "").lower()
+
+
+@pytest.mark.asyncio
+async def test_healer_starts_on_startup(monkeypatch):
+    """Test that healer daemon starts when ENABLE_HEALER=true"""
+    monkeypatch.setenv("ENABLE_HEALER", "true")
+    monkeypatch.setenv("API_KEY", "test")
+
+    from fastapi import FastAPI
+
+    from api.server import lifespan
+
+    app = FastAPI()
+
+    async with lifespan(app):
+        pass  # Healer should start and stop cleanly

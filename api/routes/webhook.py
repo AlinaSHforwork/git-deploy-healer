@@ -6,13 +6,22 @@ import hmac
 import os
 from typing import Any, Dict, Optional, cast
 
-from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, logger
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
+from loguru import logger
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from core.engine import ContainerEngine
 from core.git_manager import GitManager
 from core.metrics import DEPLOYMENT_COUNTER
+
+# Add this to avoid import errors in tests
+try:
+    logger.info("Webhook module loaded")
+except Exception:
+    import logging
+
+    logger = logging.getLogger(__name__)  # type: ignore
 
 router = APIRouter()
 
@@ -107,12 +116,20 @@ async def webhook(
                     # Extract actual host port from container
                     host_port = container_port  # fallback
                     if hasattr(result, 'host_port') and result.host_port:
-                        # parse port from container.ports if dict
                         if isinstance(result.host_port, dict):
                             for port_info in result.host_port.values():
-                                if port_info:
-                                    host_port = port_info[0]['HostPort']
-                                    break
+                                if (
+                                    port_info
+                                    and isinstance(port_info, list)
+                                    and len(port_info) > 0
+                                ):
+                                    try:
+                                        host_port = int(
+                                            port_info[0].get('HostPort', host_port)
+                                        )
+                                        break
+                                    except (KeyError, ValueError, TypeError):
+                                        continue
 
                     domain = f"{app_name}.localhost"
                     config = pm.generate_config(app_name, host_port, domain)
