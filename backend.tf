@@ -11,7 +11,7 @@ terraform {
     # dynamodb_table = var.lock_table
 
     # Security settings (static)
-    encrypt        = true
+    encrypt = true
 
     # KMS encryption (optional but recommended)
     # kms_key_id = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"

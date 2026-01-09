@@ -10,7 +10,7 @@ variable "ami_id" {
   description = "The AMI ID for the EC2 instance (e.g., Ubuntu 22.04 LTS)."
   type        = string
   # IMPORTANT: Replace this with a valid, current AWS free-tier AMI ID for your chosen region
-  default     = "ami-053b0a79040775d1d"
+  default = "ami-053b0a79040775d1d"
 }
 
 variable "instance_type" {

@@ -10,10 +10,10 @@ terraform {
   }
   # Remote state backend for collaboration/CI
   backend "s3" {
-    bucket         = "your-terraform-state-bucket"  # Replace with your S3 bucket
+    bucket         = "your-terraform-state-bucket" # Replace with your S3 bucket
     key            = "pypaas/terraform.tfstate"
-    region         = "us-east-1"  # Replace with your region
-    dynamodb_table = "terraform-locks"  # Replace with your DynamoDB table for locking
+    region         = "us-east-1"       # Replace with your region
+    dynamodb_table = "terraform-locks" # Replace with your DynamoDB table for locking
     encrypt        = true
   }
 }
@@ -24,12 +24,12 @@ provider "aws" {
 
 # Variables (expanded for flexibility)
 variable "aws_region" { default = "us-east-1" }
-variable "ami_id" { default = "ami-0abcdef1234567890" }  # Replace with actual AMI
+variable "ami_id" { default = "ami-0abcdef1234567890" } # Replace with actual AMI
 variable "instance_type" { default = "t3.micro" }
 variable "public_key_path" { default = "~/.ssh/id_rsa.pub" }
 variable "allowed_ips" {
   type        = list(string)
-  default     = ["203.0.113.0/24"]  # Restrict to your IP/CIDR by default
+  default     = ["203.0.113.0/24"] # Restrict to your IP/CIDR by default
   description = "List of CIDR blocks allowed for SSH and HTTP/HTTPS access"
 }
 variable "min_instances" { default = 1 }
@@ -45,7 +45,7 @@ resource "aws_key_pair" "deployer_key" {
 # 3. Networking (VPC, Multi-AZ Subnets)
 resource "aws_vpc" "pypaas_vpc" {
   cidr_block = "10.0.0.0/16"
-  tags = { Name = "pypaas-vpc" }
+  tags       = { Name = "pypaas-vpc" }
 }
 
 resource "aws_subnet" "pypaas_subnet_a" {
@@ -53,7 +53,7 @@ resource "aws_subnet" "pypaas_subnet_a" {
   cidr_block              = "10.0.1.0/24"
   availability_zone       = "${var.aws_region}a"
   map_public_ip_on_launch = true
-  tags = { Name = "pypaas-subnet-a" }
+  tags                    = { Name = "pypaas-subnet-a" }
 }
 
 resource "aws_subnet" "pypaas_subnet_b" {
@@ -61,7 +61,7 @@ resource "aws_subnet" "pypaas_subnet_b" {
   cidr_block              = "10.0.2.0/24"
   availability_zone       = "${var.aws_region}b"
   map_public_ip_on_launch = true
-  tags = { Name = "pypaas-subnet-b" }
+  tags                    = { Name = "pypaas-subnet-b" }
 }
 
 # 4. Internet Gateway
@@ -101,11 +101,11 @@ resource "aws_security_group" "pypaas_sg" {
   }
 
   ingress {
-    description = "PyPaaS API/Dashboard (from ALB)"
-    from_port   = 8085
-    to_port     = 8085
-    protocol    = "tcp"
-    security_groups = [aws_security_group.pypaas_alb_sg.id]  # Restrict to ALB
+    description     = "PyPaaS API/Dashboard (from ALB)"
+    from_port       = 8085
+    to_port         = 8085
+    protocol        = "tcp"
+    security_groups = [aws_security_group.pypaas_alb_sg.id] # Restrict to ALB
   }
 
   egress {
@@ -126,7 +126,7 @@ resource "aws_security_group" "pypaas_alb_sg" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = var.allowed_ips  # Or ["0.0.0.0/0"] for public
+    cidr_blocks = var.allowed_ips # Or ["0.0.0.0/0"] for public
   }
 
   ingress {
@@ -152,8 +152,8 @@ resource "aws_iam_role" "pypaas_ec2_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "ec2.amazonaws.com" }
     }]
   })
@@ -249,7 +249,7 @@ resource "aws_launch_template" "pypaas_lt" {
   vpc_security_group_ids = [aws_security_group.pypaas_sg.id]
   metadata_options {
     http_endpoint               = "enabled"
-    http_tokens                 = "required"  # IMDSv2 for security
+    http_tokens                 = "required" # IMDSv2 for security
     http_put_response_hop_limit = 1
   }
   user_data = base64encode(<<EOF
