@@ -1,4 +1,5 @@
 # tests/conftest.py
+"""Enhanced test configuration with better mocks and fixtures."""
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -71,3 +72,66 @@ def patch_docker_and_engine():
         patch("core.engine.ContainerEngine", return_value=fake_engine),
     ):
         yield
+
+
+# ---------------------------------------------------------------------------
+# Database fixture for tests that need it
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def test_db_url():
+    """Provide test database URL."""
+    return "sqlite:///:memory:"
+
+
+@pytest.fixture
+def db_manager(test_db_url):
+    """Create test database manager."""
+    from core.models import DatabaseManager
+
+    manager = DatabaseManager(test_db_url)
+    manager.create_tables()
+    yield manager
+    manager.drop_tables()
+
+
+@pytest.fixture
+def db_session(db_manager):
+    """Create database session for tests."""
+    session = db_manager.get_session()
+    yield session
+    session.close()
+
+
+# ---------------------------------------------------------------------------
+# Mock requests for health checks
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def mock_requests(monkeypatch):
+    """Mock requests library for HTTP health checks."""
+    mock = MagicMock()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock.get.return_value = mock_response
+
+    monkeypatch.setattr("core.engine.requests", mock)
+    return mock
+
+
+# ---------------------------------------------------------------------------
+# Clean environment for each test
+# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def clean_env(monkeypatch):
+    """Ensure clean environment variables for each test."""
+    # Set default test values
+    monkeypatch.setenv("API_KEY", "test-key")
+    monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", "test-webhook-secret")
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+
+    yield
+
+    # Reset any modified global state
+    import api.auth
+
+    if hasattr(api.auth, "_failed_attempts"):
+        api.auth._failed_attempts.clear()

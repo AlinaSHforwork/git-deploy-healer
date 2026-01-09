@@ -1,8 +1,10 @@
 # requirements.txt
-# Core
+# Updated with security fixes and new dependencies
+
+# Core Framework
 fastapi==0.110.0
 uvicorn==0.27.0
-starlette
+starlette==0.36.3
 pydantic==2.5.3
 
 # HTTP & Async
@@ -10,25 +12,48 @@ httpx==0.27.0
 aiofiles==23.1.0
 python-multipart==0.0.6
 requests==2.31.0
-urllib3<2
+urllib3>=2.0.0  # Security: Updated from <2 to >=2.0.0
 
 # Docker & Git
 docker==7.0.0
 GitPython==3.1.40
 
+# Database (NEW)
+sqlalchemy==2.0.25
+alembic==1.13.1
+psycopg2-binary==2.9.9  # PostgreSQL adapter
+
 # Observability
 loguru==0.7.2
 prometheus-client==0.20.0
 
-# Security & Utils
+# Security & Auth
 python-dotenv==1.0.1
-jinja2==3.1.2
-slowapi
+pyjwt==2.8.0  # JWT support
+cryptography==42.0.0  # Required by PyJWT
 
-# Development
-flake8
-pytest
-pytest-asyncio==0.21.0
-pytest-mock==3.10.0
+# Web Server
+jinja2==3.1.2
+slowapi==0.1.9
+
+# AWS Integration (Optional)
+boto3==1.34.34  # For AWS Secrets Manager / SSM
+
+# Development & Testing
+flake8==7.0.0
+pytest==8.0.0
+pytest-asyncio==0.23.5
+pytest-mock==3.12.0
 pytest-cov==4.1.0
-types-requests
+types-requests==2.31.0.20240125
+
+# Additional Security
+bandit[toml]==1.7.6  # Security linting
+
+# Pre-commit hooks
+pre-commit==3.6.0
+black==24.1.1
+isort==5.13.2
+mypy==1.8.0
+
+types-requests>=2.31.0.0
