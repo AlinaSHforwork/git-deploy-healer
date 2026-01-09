@@ -7,8 +7,6 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-RUN apt-get update && apt-get install -y git
-
 # Runtime stage
 FROM python:3.12-slim
 
@@ -17,6 +15,9 @@ RUN useradd -m appuser
 USER appuser
 
 WORKDIR /app
+USER root
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+USER appuser
 
 # Copy from builder
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages

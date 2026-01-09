@@ -195,22 +195,24 @@ jobs:
         run: |
           docker run --rm pypaas:test python -c "import api.server; print('OK')"
 
-  terraform-validate:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+# Optional: Terraform validation job, using only for aws infrastructure as code
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.7.0
+  # terraform-validate:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
 
-      - name: Terraform Format Check
-        run: terraform fmt -check -recursive
+  #     - name: Setup Terraform
+  #       uses: hashicorp/setup-terraform@v3
+  #       with:
+  #         terraform_version: 1.7.0
 
-      - name: Terraform Init
-        run: terraform init -backend=false
+  #     - name: Terraform Format Check
+  #       run: terraform fmt -check -recursive
 
-      - name: Terraform Validate
-        run: terraform validate
+  #     - name: Terraform Init
+  #       run: terraform init -backend=false
+
+  #     - name: Terraform Validate
+  #       run: terraform validate

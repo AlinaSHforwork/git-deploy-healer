@@ -1,32 +1,11 @@
 # main.tf
 
-# 1. AWS Provider Configuration
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-  # Remote state backend for collaboration/CI
-  backend "s3" {
-    bucket         = "your-terraform-state-bucket" # Replace with your S3 bucket
-    key            = "pypaas/terraform.tfstate"
-    region         = "us-east-1"       # Replace with your region
-    dynamodb_table = "terraform-locks" # Replace with your DynamoDB table for locking
-    encrypt        = true
-  }
-}
 
 provider "aws" {
   region = var.aws_region
 }
 
 # Variables (expanded for flexibility)
-variable "aws_region" { default = "us-east-1" }
-variable "ami_id" { default = "ami-0abcdef1234567890" } # Replace with actual AMI
-variable "instance_type" { default = "t3.micro" }
-variable "public_key_path" { default = "~/.ssh/id_rsa.pub" }
 variable "allowed_ips" {
   type        = list(string)
   default     = ["203.0.113.0/24"] # Restrict to your IP/CIDR by default
@@ -239,25 +218,7 @@ resource "aws_iam_instance_profile" "pypaas_profile" {
   role = aws_iam_role.pypaas_ec2_role.name
 }
 
-# 8. Launch Template
-resource "aws_launch_template" "pypaas_lt" {
-  name          = "pypaas-launch-template"
-  image_id      = var.ami_id
-  instance_type = var.instance_type
-  key_name      = aws_key_pair.deployer_key.key_name
-  iam_instance_profile { name = aws_iam_instance_profile.pypaas_profile.name }
-  vpc_security_group_ids = [aws_security_group.pypaas_sg.id]
-  metadata_options {
-    http_endpoint               = "enabled"
-    http_tokens                 = "required" # IMDSv2 for security
-    http_put_response_hop_limit = 1
-  }
-  user_data = base64encode(<<EOF
-#!/bin/bash
-# Your provisioning script here (e.g., install Docker, run Ansible)
-EOF
-  )
-}
+
 
 # 9. Auto Scaling Group
 resource "aws_autoscaling_group" "pypaas_asg" {
