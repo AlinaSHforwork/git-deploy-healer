@@ -2,9 +2,15 @@
 __pycache__/
 *.pyc
 venv/
+*.pyo
+*.pyd
+.Python
+env/
 
 # Environment Variables (Secrets)
 .env
+.env.local
+.env.*.local
 
 # Runtime Data (IMPORTANT: Don't commit these)
 repos/
@@ -12,11 +18,40 @@ nginx_confs/
 
 # Logs
 *.log
+*.log.*
 
 # IDE Settings (Optional)
 .vscode/
 .idea/
 .DS_Store
 
+# Test artifacts
 pytest.xml
 coverage.xml
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Terraform (CRITICAL - NEVER COMMIT STATE)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform.lock.hcl
+terraform.tfvars
+*.auto.tfvars
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+local.db
+
+# Docker
+.dockerignore
+
+# Security
+*.pem
+*.key
+*.crt
+secrets/
