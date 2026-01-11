@@ -3,8 +3,8 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Security
-from fastapi.responses import JSONResponse
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, Security
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.security import APIKeyHeader
 from fastapi.templating import Jinja2Templates
 from loguru import logger
@@ -95,17 +95,80 @@ app.mount("/metrics", metrics_app)
 templates = Jinja2Templates(directory="templates")
 
 
+@app.get("/health")
+async def health_check():
+    """
+    Health check endpoint for AWS Load Balancers and uptime monitoring.
+    """
+    return {"status": "ok", "service": "git-deploy-healer"}
+
+
 @app.get("/")
 def root():
-    return {"message": "git-deploy-healer API is running"}
+    """
+    Root endpoint that returns a simple message and links to docs and dashboard.
+    """
+    return {
+        "message": "git-deploy-healer API is running",
+        "docs": "/docs",
+        "dashboard": "/dashboard",
+    }
 
 
-@app.get("/health")
-async def health():
+# Add favicon handler to avoid 404 logs
+@app.get("/favicon.ico")
+async def favicon():
+    # Return empty 204 so browsers stop repeatedly requesting a missing favicon
+    return Response(status_code=204)
+
+
+# Dashboard page - render the Jinja2 template using engine.list_apps()
+@app.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
+async def dashboard(request: Request):
     """
-    Lightweight health endpoint used by tests.
+    Render the dashboard HTML page.
+    Access at: http://<host>:<port>/dashboard
     """
-    return {"status": "ok"}
+    try:
+        raw_apps = engine.list_apps()
+    except Exception as e:
+        logger.debug(f"Failed to list apps for dashboard: {e}")
+        raw_apps = []
+
+    apps = []
+    for a in raw_apps:
+        name = a.get("name") if isinstance(a, dict) else getattr(a, "name", None)
+        cid = a.get("id") if isinstance(a, dict) else getattr(a, "id", None)
+        status = (
+            a.get("status") if isinstance(a, dict) else getattr(a, "status", "unknown")
+        )
+        ports = a.get("ports") if isinstance(a, dict) else getattr(a, "ports", None)
+
+        host_port = None
+        if isinstance(ports, dict):
+            for v in ports.values():
+                if v and isinstance(v, list) and len(v) > 0:
+                    try:
+                        host_port = int(v[0].get("HostPort"))
+                        break
+                    except Exception as e:
+                        logger.debug(f"Failed to parse port info for dashboard: {e}")
+                        continue
+        url = f"http://localhost:{host_port}" if host_port else None
+
+        apps.append(
+            {
+                "name": name or "unknown",
+                "id": cid or name,
+                "status": status,
+                "port": host_port,
+                "url": url,
+            }
+        )
+
+    return templates.TemplateResponse(
+        request=request, name="dashboard.html", context={"apps": apps}
+    )
 
 
 @app.post("/trigger", response_model=None, dependencies=[Depends(require_api_key)])

@@ -126,12 +126,13 @@ pip install -r requirements.txt
 
 ### 4. Run the server
 ```bash
-uvicorn api.server:app --host 0.0.0.0 --port 8085
+uvicorn api.server:app --host 0.0.0.0 --port 8085 --reload
 ```
 
 - API Docs: http://localhost:8085/docs
 - Health Check: http://localhost:8085/health
 - Metrics: http://localhost:8085/metrics
+- Dashboard: http://localhost:8085/dashboard
 
 ### 5. Deploy a sample app
 Use the included example:
