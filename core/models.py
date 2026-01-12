@@ -7,6 +7,7 @@ This module provides SQLAlchemy models for:
 """
 from datetime import datetime
 from typing import Optional
+from venv import logger
 
 from sqlalchemy import (
     Boolean,
@@ -18,6 +19,7 @@ from sqlalchemy import (
     String,
     Text,
     create_engine,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker
 
@@ -123,17 +125,54 @@ class AuditLog(Base):
 
 
 class DatabaseManager:
-    """Database connection and session management."""
+    """Database connection and session management with proper pooling."""
 
-    def __init__(self, database_url: str):
-        """Initialize database connection.
+    def __init__(
+        self,
+        database_url: str,
+        pool_size: int = 5,
+        max_overflow: int = 10,
+        pool_timeout: int = 30,
+        pool_recycle: int = 3600,
+        echo: bool = False,
+    ):
+        """Initialize database connection with production-ready pooling.
 
         Args:
             database_url: SQLAlchemy database URL
+            pool_size: Number of connections to maintain in the pool
+            max_overflow: Max number of connections above pool_size
+            pool_timeout: Seconds to wait before giving up on getting a connection
+            pool_recycle: Recycle connections after this many seconds (prevents stale connections)
+            echo: Echo SQL statements (for debugging)
         """
-        self.engine = create_engine(database_url, echo=False)
+        # Parse URL to determine if SQLite (which doesn't support pooling)
+        is_sqlite = database_url.startswith("sqlite:")
+
+        if is_sqlite:
+            # SQLite doesn't support connection pooling
+            self.engine = create_engine(
+                database_url,
+                echo=echo,
+                connect_args={"check_same_thread": False},  # Required for SQLite
+            )
+        else:
+            # PostgreSQL/MySQL with connection pooling
+            self.engine = create_engine(
+                database_url,
+                echo=echo,
+                pool_size=pool_size,
+                max_overflow=max_overflow,
+                pool_timeout=pool_timeout,
+                pool_recycle=pool_recycle,
+                pool_pre_ping=True,  # Verify connections before using
+            )
+
         self.SessionLocal = sessionmaker(
-            autocommit=False, autoflush=False, bind=self.engine
+            autocommit=False,
+            autoflush=False,
+            bind=self.engine,
+            expire_on_commit=False,  # Prevent lazy loading errors after commit
         )
 
     def create_tables(self):
@@ -145,34 +184,125 @@ class DatabaseManager:
         Base.metadata.drop_all(bind=self.engine)
 
     def get_session(self):
-        """Get database session."""
+        """Get database session.
+
+        IMPORTANT: Caller must close the session when done.
+        Better to use get_session_context() context manager.
+        """
         return self.SessionLocal()
 
+    def get_session_context(self):
+        """Get database session as context manager (recommended).
 
-# Singleton instance
+        Usage:
+            with db_manager.get_session_context() as session:
+                session.add(obj)
+                session.commit()
+        """
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _session_scope():
+            session = self.SessionLocal()
+            try:
+                yield session
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+
+        return _session_scope()
+
+    def dispose(self):
+        """Dispose of the connection pool.
+
+        Should be called on application shutdown.
+        """
+        self.engine.dispose()
+
+    def health_check(self) -> bool:
+        """Check if database connection is healthy.
+
+        Returns:
+            True if database is accessible
+        """
+        try:
+            with self.get_session_context() as session:
+                session.execute(text("SELECT 1"))
+            return True
+        except Exception as e:
+            logger.error(f"Database health check failed: {e}")
+            return False
+
+
+# Singleton instance with proper lifecycle management
 _db_manager: Optional[DatabaseManager] = None
+_db_manager_lock = None  # Will be initialized on first use
 
 
-def get_db_manager(database_url: Optional[str] = None) -> DatabaseManager:
-    """Get or create database manager singleton.
+def get_db_manager(
+    database_url: Optional[str] = None,
+    reset: bool = False,
+    **kwargs,
+) -> DatabaseManager:
+    """Get or create database manager singleton with thread-safe initialization.
 
     Args:
         database_url: Database URL (required on first call)
+        reset: Force recreation of the singleton (for testing)
+        **kwargs: Additional arguments passed to DatabaseManager
 
     Returns:
         DatabaseManager instance
     """
-    global _db_manager
+    global _db_manager, _db_manager_lock
 
-    if _db_manager is None:
-        if database_url is None:
-            import os
+    # Lazy import to avoid issues at module load time
+    import threading
 
-            database_url = os.getenv("DATABASE_URL")
-            if not database_url:
-                raise ValueError("DATABASE_URL not configured")
+    if _db_manager_lock is None:
+        _db_manager_lock = threading.Lock()
 
-        _db_manager = DatabaseManager(database_url)
-        _db_manager.create_tables()
+    # Thread-safe singleton creation
+    with _db_manager_lock:
+        if _db_manager is None or reset:
+            # Dispose old manager if resetting
+            if _db_manager is not None and reset:
+                try:
+                    _db_manager.dispose()
+                except Exception as e:
+                    logger.warning(f"Error disposing old db_manager: {e}")
+
+            # Get database URL
+            if database_url is None:
+                import os
+
+                database_url = os.getenv("DATABASE_URL")
+                if not database_url:
+                    raise ValueError(
+                        "DATABASE_URL not configured. "
+                        "Set DATABASE_URL environment variable or pass database_url parameter."
+                    )
+
+            # Create new manager
+            _db_manager = DatabaseManager(database_url, **kwargs)
+            _db_manager.create_tables()
 
     return _db_manager
+
+
+def dispose_db_manager():
+    """Dispose of the database manager singleton.
+
+    Should be called on application shutdown.
+    """
+    global _db_manager
+    if _db_manager is not None:
+        try:
+            _db_manager.dispose()
+        except Exception as e:
+            logger.error(f"Error disposing db_manager: {e}")
+        finally:
+            _db_manager = None

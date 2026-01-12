@@ -31,6 +31,14 @@ async def get_api_key(api_key: str = Security(api_key_header)):
     return api_key
 
 
+# Expose a module-level get_db_manager so tests can monkeypatch `api.server.get_db_manager`.
+# This simply proxies to core.models.get_db_manager and keeps imports lazy.
+def get_db_manager(*args, **kwargs):
+    from core.models import get_db_manager as _get_db_manager
+
+    return _get_db_manager(*args, **kwargs)
+
+
 # --- Core Component Initialization (lightweight) ---
 engine = ContainerEngine()
 git_manager = GitManager()
@@ -41,11 +49,24 @@ proxy_manager = ProxyManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Startup
     try:
         current_apps = engine.list_apps()
         logger.info(f"Observability initialized. Active apps: {len(current_apps)}")
     except Exception as e:
         logger.warning(f"Could not initialize metrics: {e}")
+
+    # Initialize database (optional, only if using DB features)
+    db_manager = None
+    try:
+        # Use module-level proxy so tests can patch `api.server.get_db_manager`
+        db_manager = get_db_manager()
+        if db_manager.health_check():
+            logger.info("Database connection healthy")
+        else:
+            logger.warning("Database health check failed")
+    except Exception as e:
+        logger.warning(f"Database initialization skipped: {e}")
 
     # START HEALER DAEMON
     healer_task = None
@@ -58,13 +79,29 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Cleanup
+    # Cleanup/Shutdown
+    logger.info("Starting graceful shutdown...")
+
+    # Stop healer
     if healer_task:
         healer_task.cancel()
         try:
             await healer_task
         except asyncio.CancelledError:
             pass
+        logger.info("Healer daemon stopped")
+
+    # Dispose database connections
+    if db_manager:
+        try:
+            from core.models import dispose_db_manager
+
+            dispose_db_manager()
+            logger.info("Database connections closed")
+        except Exception as e:
+            logger.error(f"Error closing database: {e}")
+
+    logger.info("Shutdown complete")
 
 
 # --- App Definition ---
@@ -75,6 +112,33 @@ app = FastAPI(title="PyPaaS API", lifespan=lifespan)
 
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
+
+
+@app.get("/health/db")
+async def db_health_check():
+    """
+    Database health check endpoint.
+    Returns 200 if DB is accessible, 503 if not.
+    """
+    try:
+        db_manager = get_db_manager()
+
+        if db_manager.health_check():
+            return {"status": "healthy", "database": "connected"}
+        else:
+            return JSONResponse(
+                status_code=503,
+                content={"status": "unhealthy", "database": "connection_failed"},
+            )
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "database": "not_configured",
+                "error": str(e),
+            },
+        )
 
 
 @app.exception_handler(RateLimitExceeded)

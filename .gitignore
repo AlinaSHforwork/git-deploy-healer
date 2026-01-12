@@ -55,3 +55,4 @@ local.db
 *.key
 *.crt
 secrets/
+bin

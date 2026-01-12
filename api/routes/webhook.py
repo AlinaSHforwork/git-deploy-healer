@@ -22,7 +22,7 @@ limiter = Limiter(key_func=get_remote_address)
 def _verify_signature(
     body: bytes, signature: Optional[str], secret: Optional[str]
 ) -> bool:
-    """Verify HMAC signature with enhanced validation.
+    """Verify HMAC signature with timing-attack protection.
 
     Args:
         body: Request body bytes
@@ -32,53 +32,65 @@ def _verify_signature(
     Returns:
         True if signature is valid
     """
-    # Reject if secret not configured (security by default)
-    if not secret:
-        logger.error("GITHUB_WEBHOOK_SECRET not configured - rejecting webhook")
-        return False
+    # Always compute a signature to prevent timing attacks
+    # Use a dummy value if inputs are invalid
+    actual_secret = (
+        secret if secret and secret.strip() else "dummy-secret-32-chars-long-xxxxx"
+    )
+    actual_signature = signature if signature else "sha256=dummy"
 
-    # Reject empty string secret explicitly
-    if secret.strip() == "":
-        logger.error("GITHUB_WEBHOOK_SECRET is empty - rejecting webhook")
-        return False
+    # Track if inputs are valid (but don't return early)
+    is_valid_input = True
+
+    if not secret or secret.strip() == "":
+        logger.error("GITHUB_WEBHOOK_SECRET not configured or empty")
+        is_valid_input = False
 
     if not signature:
         logger.warning("Webhook signature missing")
-        return False
+        is_valid_input = False
 
-    # Validate signature format
-    if "=" not in signature:
+    # Parse signature format
+    if "=" not in actual_signature:
         logger.warning("Invalid signature format - missing '='")
-        return False
+        is_valid_input = False
 
-    parts = signature.split("=", 1)
+    parts = actual_signature.split("=", 1)
     if len(parts) != 2:
         logger.warning("Invalid signature format - wrong number of parts")
-        return False
+        is_valid_input = False
 
-    alg, sig = parts
+    alg = parts[0] if len(parts) == 2 else "sha256"
+    sig = parts[1] if len(parts) == 2 else "dummy"
 
     # Only accept sha256
     if alg != "sha256":
         logger.warning(f"Unsupported signature algorithm: {alg}")
-        return False
+        is_valid_input = False
 
-    # Compute expected signature
+    # Always compute expected signature (constant time regardless of errors)
     try:
-        digest = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+        digest = hmac.new(actual_secret.encode(), body, hashlib.sha256).hexdigest()
     except Exception as e:
         logger.error(f"Failed to compute HMAC: {e}")
-        return False
+        digest = "0" * 64  # dummy digest
+        is_valid_input = False
 
-    # Constant-time comparison
+    # Always perform comparison (constant time)
     try:
-        is_valid = hmac.compare_digest(digest, sig)
-        if not is_valid:
-            logger.warning("Webhook signature mismatch")
-        return is_valid
+        signatures_match = hmac.compare_digest(digest, sig)
     except Exception as e:
         logger.error(f"Signature comparison failed: {e}")
-        return False
+        signatures_match = False
+        is_valid_input = False
+
+    # Final result: both inputs must be valid AND signatures must match
+    result = is_valid_input and signatures_match
+
+    if not result:
+        logger.warning("Webhook signature verification failed")
+
+    return result
 
 
 @limiter.limit("10/minute")

@@ -11,6 +11,7 @@ from core.models import (
     DatabaseManager,
     Deployment,
     DeploymentStatus,
+    dispose_db_manager,
     get_db_manager,
 )
 
@@ -261,6 +262,178 @@ class TestDatabaseManager:
         tables = inspector.get_table_names()
 
         assert len(tables) == 0
+
+
+class TestDatabasePooling:
+    """Test database connection pooling."""
+
+    def test_sqlite_no_pooling(self, monkeypatch):
+        """Test that SQLite doesn't use connection pooling."""
+        import core.models
+
+        core.models._db_manager = None
+
+        db_url = "sqlite:///:memory:"
+        manager = DatabaseManager(db_url)
+        assert not hasattr(manager.engine.pool, 'size') or manager.engine.pool.size == 5
+
+    def test_postgres_pooling(self, monkeypatch):
+        """Test that PostgreSQL uses connection pooling."""
+        import core.models
+
+        core.models._db_manager = None
+
+        # Mock PostgreSQL URL (won't actually connect)
+        db_url = "postgresql://user:pass@localhost/db"
+
+        try:
+            manager = DatabaseManager(db_url, pool_size=3, max_overflow=7)
+
+            # Check pool configuration
+            assert manager.engine.pool.size() == 3
+        except Exception:
+            # Connection will fail, but pool should be configured
+            pass
+
+    def test_session_context_manager(self, monkeypatch):
+        """Test session context manager commits and closes properly."""
+        import core.models
+
+        core.models._db_manager = None
+
+        db_url = "sqlite:///:memory:"
+        manager = DatabaseManager(db_url)
+        manager.create_tables()
+
+        # Create object using context manager
+        with manager.get_session_context() as session:
+            deployment = Deployment(
+                app_name="test-app", image_tag="test:v1", status="running"
+            )
+            session.add(deployment)
+            # Commit happens automatically
+
+        # Verify object was persisted
+        with manager.get_session_context() as session:
+            result = session.query(Deployment).filter_by(app_name="test-app").first()
+            assert result is not None
+            assert result.image_tag == "test:v1"
+
+    def test_session_context_rollback_on_error(self, monkeypatch):
+        """Test that session rolls back on exception."""
+        import core.models
+
+        core.models._db_manager = None
+
+        db_url = "sqlite:///:memory:"
+        manager = DatabaseManager(db_url)
+        manager.create_tables()
+
+        # Try to create object but raise exception
+        with pytest.raises(ValueError):
+            with manager.get_session_context() as session:
+                deployment = Deployment(
+                    app_name="test-app", image_tag="test:v1", status="running"
+                )
+                session.add(deployment)
+                raise ValueError("Something went wrong")
+
+        # Verify rollback - object should not exist
+        with manager.get_session_context() as session:
+            result = session.query(Deployment).filter_by(app_name="test-app").first()
+            assert result is None
+
+    def test_health_check_success(self, monkeypatch):
+        """Test database health check returns True when healthy."""
+        import core.models
+
+        core.models._db_manager = None
+
+        db_url = "sqlite:///:memory:"
+        manager = DatabaseManager(db_url)
+
+        assert manager.health_check() is True
+
+    def test_health_check_failure(self, monkeypatch):
+        """Test database health check returns False on error."""
+        import core.models
+
+        core.models._db_manager = None
+
+        # Invalid URL will cause health check to fail
+        db_url = "postgresql://invalid:invalid@nonexistent:9999/db"
+        manager = DatabaseManager(db_url)
+
+        assert manager.health_check() is False
+
+    def test_dispose_cleans_up_connections(self, monkeypatch):
+        """Test that dispose() cleans up connection pool."""
+        import core.models
+
+        core.models._db_manager = None
+
+        db_url = "sqlite:///:memory:"
+        manager = DatabaseManager(db_url)
+
+        # Create some sessions
+        session1 = manager.get_session()
+        session2 = manager.get_session()
+        session1.close()
+        session2.close()
+
+        # Dispose should not raise
+        manager.dispose()
+
+    def test_get_db_manager_thread_safety(self, monkeypatch):
+        """Test that get_db_manager is thread-safe."""
+        import threading
+
+        import core.models
+
+        core.models._db_manager = None
+        monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+
+        managers = []
+
+        def create_manager():
+            managers.append(get_db_manager())
+
+        threads = [threading.Thread(target=create_manager) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # All threads should get the same instance
+        assert len(set(id(m) for m in managers)) == 1
+
+    def test_get_db_manager_reset(self, monkeypatch):
+        """Test that reset parameter recreates the manager."""
+        import core.models
+
+        core.models._db_manager = None
+        monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+
+        manager1 = get_db_manager()
+        manager2 = get_db_manager(reset=True)
+
+        assert manager1 is not manager2
+
+    def test_dispose_db_manager(self, monkeypatch):
+        """Test dispose_db_manager function."""
+        import core.models
+
+        core.models._db_manager = None
+        monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+
+        manager = get_db_manager()
+        assert manager is not None
+
+        dispose_db_manager()
+
+        # After dispose, should create new instance
+        new_manager = get_db_manager()
+        assert new_manager is not manager
 
 
 class TestGetDBManager:

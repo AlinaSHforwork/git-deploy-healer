@@ -1,3 +1,15 @@
 exclude_dirs:
   - tests
   - venv
+
+# Check for timing attacks in authentication/crypto code
+tests:
+  - B105  # hardcoded_password_string
+  - B106  # hardcoded_password_funcarg
+  - B107  # hardcoded_password_default
+  - B110  # try_except_pass
+  - B201  # flask_debug_true
+  - B501  # request_with_no_cert_validation
+  - B506  # yaml_load
+  - B601  # paramiko_calls
+  - B602  # shell_injection
