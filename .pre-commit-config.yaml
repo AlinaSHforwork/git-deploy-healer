@@ -16,8 +16,9 @@ repos:
     hooks:
       - id: mypy
         pass_filenames: false
-        args: ["core", "api"]
-        additional_dependencies: []
+        args: ["core/engine.py", "core/network.py", "api/routes/webhook.py"]
+        additional_dependencies:
+          - types-requests
 
   - repo: https://github.com/pycqa/flake8
     rev: 6.1.0

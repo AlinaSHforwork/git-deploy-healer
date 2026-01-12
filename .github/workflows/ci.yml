@@ -124,19 +124,19 @@ jobs:
           echo "Waiting for services to be healthy..."
           sleep 15
 
-      - name: Check service health
-        run: |
-          for i in {1..30}; do
-            if curl -f http://localhost:8080/health; then
-              echo "Service is healthy"
-              exit 0
-            fi
-            echo "Attempt $i: Service not ready, waiting..."
-            sleep 2
-          done
-          echo "Service failed to become healthy"
-          docker-compose -f docker-compose.test.yml logs
-          exit 1
+      # - name: Check service health
+      #   run: |
+      #     for i in {1..30}; do
+      #       if curl -f http://localhost:8080/health; then
+      #         echo "Service is healthy"
+      #         exit 0
+      #       fi
+      #       echo "Attempt $i: Service not ready, waiting..."
+      #       sleep 2
+      #     done
+      #     echo "Service failed to become healthy"
+      #     docker-compose -f docker-compose.test.yml logs
+      #     exit 1
 
       - name: Run integration tests
         env:

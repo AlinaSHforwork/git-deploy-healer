@@ -191,27 +191,18 @@ async def webhook(
                     pm = ProxyManager()
                     port_mgr = PortManager()  # noqa: F841
 
-                    # Extract host port from container
-                    host_port = container_port  # fallback
+                    # Extract host port using standardized method
+                    host_port = result.get_host_port()
 
-                    if hasattr(result, 'host_port') and result.host_port:
-                        if isinstance(result.host_port, dict):
-                            # Parse Docker port mapping format
-                            for port_key, port_info in result.host_port.items():
-                                if (
-                                    port_info
-                                    and isinstance(port_info, list)
-                                    and len(port_info) > 0
-                                ):
-                                    try:
-                                        host_port = int(
-                                            port_info[0].get('HostPort', host_port)
-                                        )
-                                        break
-                                    except (KeyError, ValueError, TypeError):
-                                        continue
+                    if host_port is None:
+                        logger.error(
+                            f"[{correlation_id}] Could not determine host port for {app_name}"
+                        )
+                        return
 
                     domain = f"{app_name}.localhost"
+
+                    # Generate and write config
                     config = pm.generate_config(app_name, host_port, domain)
                     pm.write_config(app_name, config, overwrite=True)
                     pm.enable_config(app_name)

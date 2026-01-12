@@ -338,3 +338,81 @@ class TestIntegration:
                     )
 
         assert result.status == "ok"
+
+
+class TestResultPortExtraction:
+    """Test Result.get_host_port() method with various formats."""
+
+    def test_get_host_port_integer(self):
+        """Test host port extraction from integer."""
+        result = Result(status="ok", host_port=8080)
+        assert result.get_host_port() == 8080
+
+    def test_get_host_port_string(self):
+        """Test host port extraction from string."""
+        result = Result(status="ok", host_port="8080")
+        assert result.get_host_port() == 8080
+
+    def test_get_host_port_docker_dict_format(self):
+        """Test host port extraction from Docker dict format."""
+        ports = {'80/tcp': [{'HostIp': '0.0.0.0', 'HostPort': '8080'}]}
+        result = Result(status="ok", host_port=ports)
+        assert result.get_host_port() == 8080
+
+    def test_get_host_port_docker_dict_multiple_ports(self):
+        """Test extraction from dict with multiple port mappings."""
+        ports = {
+            '80/tcp': [{'HostIp': '0.0.0.0', 'HostPort': '8080'}],
+            '443/tcp': [{'HostIp': '0.0.0.0', 'HostPort': '8443'}],
+        }
+        result = Result(status="ok", host_port=ports)
+        # Should return first valid port found
+        assert result.get_host_port() in [8080, 8443]
+
+    def test_get_host_port_docker_dict_no_mapping(self):
+        """Test extraction when port not mapped."""
+        ports = {'80/tcp': None}
+        result = Result(status="ok", host_port=ports)
+        assert result.get_host_port() is None
+
+    def test_get_host_port_list_format(self):
+        """Test extraction from list format."""
+        ports = [{'HostIp': '0.0.0.0', 'HostPort': '9090'}]
+        result = Result(status="ok", host_port=ports)
+        assert result.get_host_port() == 9090
+
+    def test_get_host_port_none(self):
+        """Test extraction when host_port is None."""
+        result = Result(status="ok", host_port=None)
+        assert result.get_host_port() is None
+
+    def test_get_host_port_invalid_string(self):
+        """Test extraction from invalid string."""
+        result = Result(status="ok", host_port="not-a-port")
+        assert result.get_host_port() is None
+
+    def test_get_host_port_empty_dict(self):
+        """Test extraction from empty dict."""
+        result = Result(status="ok", host_port={})
+        assert result.get_host_port() is None
+
+    def test_get_host_port_malformed_dict(self):
+        """Test extraction from malformed dict."""
+        ports = {'80/tcp': [{'NoHostPort': 'wrong'}]}
+        result = Result(status="ok", host_port=ports)
+        assert result.get_host_port() is None
+
+    def test_to_dict_serialization(self):
+        """Test Result.to_dict() for JSON serialization."""
+        ports = {'80/tcp': [{'HostPort': '8080'}]}
+        result = Result(
+            status="ok", host_port=ports, container_id="abc123", container_port=80
+        )
+
+        d = result.to_dict()
+
+        assert d['status'] == 'ok'
+        assert d['host_port'] == 8080
+        assert d['container_port'] == 80
+        assert d['container_id'] == 'abc123'
+        assert d['error'] is None

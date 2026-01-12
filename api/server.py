@@ -141,6 +141,53 @@ async def db_health_check():
         )
 
 
+@app.get("/api/deployments/{app_name}/status")
+async def get_deployment_status(app_name: str, _: bool = Depends(require_api_key)):
+    """
+    Get deployment status including port mappings.
+    Useful for debugging deployment issues.
+    """
+    try:
+        containers = engine.list_containers(app_name)
+
+        if not containers:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "No containers found", "app_name": app_name},
+            )
+
+        container_info = []
+        for c in containers:
+            ports = getattr(c, "ports", {})
+            status = getattr(c, "status", "unknown")
+            container_id = getattr(c, "id", "unknown")
+
+            # Use standardized port extraction
+            from core.network import parse_docker_port_mapping
+
+            host_port = parse_docker_port_mapping(ports)
+
+            container_info.append(
+                {
+                    "container_id": container_id[:12] if container_id else "unknown",
+                    "status": status,
+                    "host_port": host_port,
+                    "raw_ports": str(ports)[:200],  # Truncate for safety
+                }
+            )
+
+        return {
+            "app_name": app_name,
+            "container_count": len(containers),
+            "containers": container_info,
+        }
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500, content={"error": str(e), "app_name": app_name}
+        )
+
+
 @app.exception_handler(RateLimitExceeded)
 def rate_limit_handler(request, exc):
     return JSONResponse(

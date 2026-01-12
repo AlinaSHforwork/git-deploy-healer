@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional
 import requests  # type: ignore
 from loguru import logger
 
+from core.metrics import ACTIVE_CONTAINERS_GAUGE
+
 
 class DeploymentError(Exception):
     """Raised when deployment fails."""
@@ -20,7 +22,7 @@ class HealthCheckError(Exception):
 
 
 class Result:
-    """Deployment result container."""
+    """Deployment result container with standardized port information."""
 
     def __init__(
         self,
@@ -28,11 +30,76 @@ class Result:
         host_port: Optional[Any] = None,
         error: Optional[str] = None,
         container_id: Optional[str] = None,
+        container_port: Optional[int] = None,
     ):
         self.status = status
         self.host_port = host_port
         self.container_id = container_id or host_port
+        self.container_port = container_port
         self.error = error
+
+    def get_host_port(self) -> Optional[int]:
+        """Extract host port from various Docker port mapping formats.
+
+        Docker returns ports in different formats:
+        - Dict: {'80/tcp': [{'HostIp': '0.0.0.0', 'HostPort': '8080'}]}
+        - Dict: {'80/tcp': None} (no mapping)
+        - String: '8080' (direct port)
+        - Int: 8080
+
+        Returns:
+            Integer host port or None if not found
+        """
+        if self.host_port is None:
+            return None
+
+        # Case 1: Already an integer
+        if isinstance(self.host_port, int):
+            return self.host_port
+
+        # Case 2: String that can be converted to int
+        if isinstance(self.host_port, str):
+            try:
+                return int(self.host_port)
+            except (ValueError, TypeError):
+                pass
+
+        # Case 3: Docker port mapping dict
+        if isinstance(self.host_port, dict):
+            # Iterate through all port mappings
+            for port_key, port_info in self.host_port.items():
+                if port_info is None:
+                    continue
+
+                # port_info should be a list of dicts
+                if isinstance(port_info, list) and len(port_info) > 0:
+                    first_mapping = port_info[0]
+                    if isinstance(first_mapping, dict) and 'HostPort' in first_mapping:
+                        try:
+                            return int(first_mapping['HostPort'])
+                        except (ValueError, TypeError, KeyError):
+                            continue
+
+        # Case 4: List of port mappings (some edge cases)
+        if isinstance(self.host_port, list) and len(self.host_port) > 0:
+            first = self.host_port[0]
+            if isinstance(first, dict) and 'HostPort' in first:
+                try:
+                    return int(first['HostPort'])
+                except (ValueError, TypeError, KeyError):
+                    pass
+
+        return None
+
+    def to_dict(self) -> dict:
+        """Convert result to dictionary for JSON serialization."""
+        return {
+            'status': self.status,
+            'host_port': self.get_host_port(),
+            'container_port': self.container_port,
+            'container_id': self.container_id,
+            'error': self.error,
+        }
 
 
 class ContainerEngine:
@@ -292,27 +359,52 @@ class ContainerEngine:
         container_port: Optional[int] = None,
         environment: Optional[dict] = None,
     ):
-        """Basic deploy operation (use deploy_with_rollback for production)."""
-        from core.metrics import ACTIVE_CONTAINERS_GAUGE
+        """Basic deploy operation (use deploy_with_rollback for production).
 
+        Args:
+            app_name: Application name
+            image_tag: Docker image tag
+            repo_path: Repository path (unused)
+            container_port: Container internal port to expose
+            environment: Environment variables
+
+        Returns:
+            Result object with deployment status and port information
+        """
         client = self.client
+
+        # Default container port if not specified
+        if container_port is None:
+            container_port = 8080
+            logger.info(f"No container_port specified, using default: {container_port}")
+
         try:
             run_kwargs = {
                 "image": image_tag,
                 "detach": True,
-                "labels": {"app": app_name, "managed_by": "pypaas"},
+                "name": f"{app_name}-{int(time.time())}",  # Unique name with timestamp
+                "labels": {
+                    "app": app_name,
+                    "managed_by": "pypaas",
+                    "container_port": str(container_port),
+                },
             }
 
             if environment:
                 run_kwargs["environment"] = environment
 
-            if container_port is not None:
-                try:
-                    run_kwargs["ports"] = {f"{container_port}/tcp": None}
-                except Exception:  # nosec B110
-                    pass
+            # Configure port mapping: container_port -> random host port
+            try:
+                run_kwargs["ports"] = {
+                    f"{container_port}/tcp": None
+                }  # None = random host port
+            except Exception as e:
+                logger.warning(f"Failed to configure port mapping: {e}")
 
             container = client.containers.run(**run_kwargs)
+
+            # Reload container to get fresh port mappings
+            container.reload()
 
             # Update metrics
             try:
@@ -321,22 +413,32 @@ class ContainerEngine:
             except Exception:  # nosec B110
                 pass
 
-            host_port = None
-            try:
-                ports = getattr(container, "ports", None)
-                host_port = ports
-            except Exception:
-                host_port = getattr(container, "id", None)
+            # Extract port information
+            ports_dict = getattr(container, "ports", {})
+            container_id = getattr(container, "id", None)
 
-            return Result(
+            result = Result(
                 status="ok",
-                host_port=host_port,
-                container_id=getattr(container, "id", None),
+                host_port=ports_dict,  # Pass full dict to Result
+                container_id=container_id,
+                container_port=container_port,
             )
+            short_id = container_id[:12] if container_id else "unknown"
+            # Log port mapping for debugging
+            host_port = result.get_host_port()
+            if host_port:
+                logger.info(
+                    f"Container {short_id} mapped: " f"{container_port} -> {host_port}"
+                )
+            else:
+                logger.warning(f"Could not extract host port for container {short_id}")
+
+            return result
 
         except Exception as e:
             logger.error(f"Deploy failed: {e}")
             return Result(
                 status="failed",
                 error=str(e),
+                container_port=container_port,
             )
