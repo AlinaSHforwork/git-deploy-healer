@@ -5,62 +5,465 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PyPaaS Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <style>
-        .status-running { color: green; font-weight: bold; }
-        .status-exited { color: red; font-weight: bold; }
+        .status-running { color: #28a745; }
+        .status-exited { color: #dc3545; }
+        .status-restarting { color: #ffc107; }
+        .container-card {
+            transition: box-shadow 0.3s;
+            margin-bottom: 20px;
+        }
+        .container-card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .action-btn { margin: 2px; }
+        .logs-container {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .deploy-form {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .metrics-card {
+            text-align: center;
+            padding: 20px;
+        }
+        .metrics-card h3 {
+            margin: 0;
+            color: #495057;
+        }
+        .metrics-card .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #007bff;
+        }
     </style>
 </head>
 <body class="bg-light">
 
-<div class="container py-5">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h3">🚀 PyPaaS Dashboard</h1>
-        <button onclick="window.location.reload()" class="btn btn-primary btn-sm">Refresh</button>
+<nav class="navbar navbar-dark bg-primary mb-4">
+    <div class="container-fluid">
+        <span class="navbar-brand mb-0 h1">🚀 PyPaaS Dashboard</span>
+        <div class="d-flex align-items-center">
+            <span class="text-white me-3">API Key: <code id="apiKeyDisplay">***</code></span>
+            <button class="btn btn-sm btn-outline-light" onclick="toggleApiKey()">
+                <i class="bi bi-eye"></i>
+            </button>
+        </div>
     </div>
+</nav>
 
-    <div class="card shadow-sm">
-        <div class="card-body p-0">
-            <table class="table table-hover mb-0">
-                <thead class="table-dark">
-                    <tr>
-                        <th>App Name</th>
-                        <th>Container ID</th>
-                        <th>Status</th>
-                        <th>Port</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for app in apps %}
-                    <tr>
-                        <td class="fw-bold">{{ app.name }}</td>
-                        <td class="text-muted">{{ app.id }}</td>
-                        <td>
-                            <span class="status-{{ app.status }}">
-                                {{ app.status|upper }}
-                            </span>
-                        </td>
-                        <td>{{ app.port }}</td>
-                        <td>
-                            {% if app.status == 'running' %}
-                                <a href="{{ app.url }}" target="_blank" class="btn btn-success btn-sm">Open App ↗</a>
-                            {% else %}
-                                <span class="text-muted">Unavailable</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+<div class="container py-4">
+    <!-- Metrics Row -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card metrics-card">
+                <div class="card-body">
+                    <h3>Total Apps</h3>
+                    <div class="metric-value" id="totalApps">{{ apps|length }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card metrics-card">
+                <div class="card-body">
+                    <h3>Running</h3>
+                    <div class="metric-value text-success" id="runningApps">
+                        {{ apps|selectattr('status', 'equalto', 'running')|list|length }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card metrics-card">
+                <div class="card-body">
+                    <h3>Stopped</h3>
+                    <div class="metric-value text-danger" id="stoppedApps">
+                        {{ apps|rejectattr('status', 'equalto', 'running')|list|length }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card metrics-card">
+                <div class="card-body">
+                    <button class="btn btn-primary w-100" onclick="refreshDashboard()">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
-    {% if not apps %}
-    <div class="text-center mt-4">
-        <p class="text-muted">No apps deployed yet.</p>
+    <!-- Deploy New App Section -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Deploy New Application</h5>
+        </div>
+        <div class="card-body deploy-form">
+            <form id="deployForm" onsubmit="deployApp(event)">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Application Name *</label>
+                        <input type="text" class="form-control" id="appName" required
+                               pattern="[a-z0-9-]+" title="Lowercase letters, numbers, and hyphens only">
+                        <small class="text-muted">Lowercase letters, numbers, and hyphens only</small>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Git Repository URL *</label>
+                        <input type="url" class="form-control" id="repoUrl" required
+                               placeholder="https://github.com/user/repo.git">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Container Port</label>
+                        <input type="number" class="form-control" id="containerPort"
+                               value="8080" min="1" max="65535">
+                    </div>
+                    <div class="col-md-8 mb-3">
+                        <label class="form-label">Domain (optional)</label>
+                        <input type="text" class="form-control" id="domain"
+                               placeholder="app.example.com">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Environment Variables (one per line, format: KEY=value)</label>
+                    <textarea class="form-control" id="envVars" rows="3"
+                              placeholder="NODE_ENV=production&#10;DEBUG=false"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-rocket-takeoff"></i> Deploy Application
+                </button>
+            </form>
+            <div id="deployStatus" class="mt-3"></div>
+        </div>
     </div>
-    {% endif %}
+
+    <!-- Applications List -->
+    <div class="card">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0"><i class="bi bi-grid-3x3-gap"></i> Running Applications</h5>
+        </div>
+        <div class="card-body p-0">
+            {% if apps %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>App Name</th>
+                            <th>Container ID</th>
+                            <th>Status</th>
+                            <th>Port</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="appsTableBody">
+                        {% for app in apps %}
+                        <tr id="app-{{ app.id }}">
+                            <td class="fw-bold">{{ app.name }}</td>
+                            <td class="text-muted">{{ app.id[:12] }}</td>
+                            <td>
+                                <span class="badge status-{{ app.status }}">
+                                    {{ app.status|upper }}
+                                </span>
+                            </td>
+                            <td>{{ app.port if app.port else 'N/A' }}</td>
+                            <td>
+                                {% if app.status == 'running' %}
+                                    <a href="{{ app.url }}" target="_blank"
+                                       class="btn btn-sm btn-success action-btn"
+                                       title="Open App">
+                                        <i class="bi bi-box-arrow-up-right"></i>
+                                    </a>
+                                    <button class="btn btn-sm btn-warning action-btn"
+                                            onclick="restartApp('{{ app.name }}', '{{ app.id }}')"
+                                            title="Restart">
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-secondary action-btn"
+                                            onclick="stopApp('{{ app.name }}', '{{ app.id }}')"
+                                            title="Stop">
+                                        <i class="bi bi-stop-circle"></i>
+                                    </button>
+                                {% else %}
+                                    <button class="btn btn-sm btn-primary action-btn"
+                                            onclick="startApp('{{ app.name }}', '{{ app.id }}')"
+                                            title="Start">
+                                        <i class="bi bi-play-circle"></i>
+                                    </button>
+                                {% endif %}
+                                <button class="btn btn-sm btn-info action-btn"
+                                        onclick="viewLogs('{{ app.name }}', '{{ app.id }}')"
+                                        title="View Logs">
+                                    <i class="bi bi-file-text"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger action-btn"
+                                        onclick="deleteApp('{{ app.name }}', '{{ app.id }}')"
+                                        title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-inbox" style="font-size: 4rem; color: #ccc;"></i>
+                <p class="text-muted mt-3">No applications deployed yet.</p>
+                <p class="text-muted">Use the form above to deploy your first app!</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
 </div>
+
+<!-- Logs Modal -->
+<div class="modal fade" id="logsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-file-text"></i> Container Logs: <span id="logsAppName"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="logs-container" id="logsContent">
+                    Loading logs...
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="refreshLogs()">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Get API key from prompt or localStorage
+    let apiKey = localStorage.getItem('pypaas_api_key');
+    if (!apiKey) {
+        apiKey = prompt('Enter your PyPaaS API Key:');
+        if (apiKey) {
+            localStorage.setItem('pypaas_api_key', apiKey);
+        }
+    }
+
+    function toggleApiKey() {
+        const display = document.getElementById('apiKeyDisplay');
+        if (display.textContent === '***') {
+            display.textContent = apiKey || 'Not Set';
+        } else {
+            display.textContent = '***';
+        }
+    }
+
+    async function makeRequest(url, options = {}) {
+        if (!apiKey) {
+            alert('API Key not set. Please refresh the page.');
+            return null;
+        }
+
+        try {
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    'X-API-Key': apiKey,
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
+            });
+
+            if (response.status === 403) {
+                alert('Invalid API Key. Please check your credentials.');
+                localStorage.removeItem('pypaas_api_key');
+                location.reload();
+                return null;
+            }
+
+            return response;
+        } catch (error) {
+            console.error('Request failed:', error);
+            alert('Request failed: ' + error.message);
+            return null;
+        }
+    }
+
+    async function deployApp(event) {
+        event.preventDefault();
+
+        const statusDiv = document.getElementById('deployStatus');
+        statusDiv.innerHTML = '<div class="alert alert-info">Deploying...</div>';
+
+        const appName = document.getElementById('appName').value;
+        const repoUrl = document.getElementById('repoUrl').value;
+        const containerPort = parseInt(document.getElementById('containerPort').value);
+        const domain = document.getElementById('domain').value;
+        const envVarsText = document.getElementById('envVars').value;
+
+        // Parse environment variables
+        const environment = {};
+        if (envVarsText) {
+            envVarsText.split('\n').forEach(line => {
+                const [key, ...valueParts] = line.split('=');
+                if (key && valueParts.length > 0) {
+                    environment[key.trim()] = valueParts.join('=').trim();
+                }
+            });
+        }
+
+        const payload = {
+            repository: {
+                name: appName,
+                clone_url: repoUrl
+            },
+            container_port: containerPort,
+            domain: domain || undefined,
+            environment: Object.keys(environment).length > 0 ? environment : undefined
+        };
+
+        const response = await makeRequest('/api/deploy', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        if (response && response.ok) {
+            const data = await response.json();
+            statusDiv.innerHTML = '<div class="alert alert-success">✓ Deployment started successfully!</div>';
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            const error = response ? await response.text() : 'Unknown error';
+            statusDiv.innerHTML = `<div class="alert alert-danger">✗ Deployment failed: ${error}</div>`;
+        }
+    }
+
+    async function restartApp(appName, containerId) {
+        if (!confirm(`Restart ${appName}?`)) return;
+
+        const response = await makeRequest(`/api/apps/${appName}/restart`, {
+            method: 'POST'
+        });
+
+        if (response && response.ok) {
+            alert('Container restarted successfully');
+            location.reload();
+        } else {
+            alert('Failed to restart container');
+        }
+    }
+
+    async function stopApp(appName, containerId) {
+        if (!confirm(`Stop ${appName}?`)) return;
+
+        const response = await makeRequest(`/api/apps/${appName}/stop`, {
+            method: 'POST'
+        });
+
+        if (response && response.ok) {
+            alert('Container stopped successfully');
+            location.reload();
+        } else {
+            alert('Failed to stop container');
+        }
+    }
+
+    async function startApp(appName, containerId) {
+        if (!confirm(`Start ${appName}?`)) return;
+
+        const response = await makeRequest(`/api/apps/${appName}/start`, {
+            method: 'POST'
+        });
+
+        if (response && response.ok) {
+            alert('Container started successfully');
+            location.reload();
+        } else {
+            alert('Failed to start container');
+        }
+    }
+
+    async function deleteApp(appName, containerId) {
+        if (!confirm(`Delete ${appName}? This cannot be undone!`)) return;
+
+        const response = await makeRequest(`/api/apps/${appName}`, {
+            method: 'DELETE'
+        });
+
+        if (response && response.ok) {
+            alert('Application deleted successfully');
+            location.reload();
+        } else {
+            alert('Failed to delete application');
+        }
+    }
+
+    let currentLogsApp = null;
+    let currentLogsContainer = null;
+
+    async function viewLogs(appName, containerId) {
+        currentLogsApp = appName;
+        currentLogsContainer = containerId;
+
+        document.getElementById('logsAppName').textContent = appName;
+        const modal = new bootstrap.Modal(document.getElementById('logsModal'));
+        modal.show();
+
+        await refreshLogs();
+    }
+
+    async function refreshLogs() {
+        if (!currentLogsApp) return;
+
+        const logsContent = document.getElementById('logsContent');
+        logsContent.textContent = 'Loading logs...';
+
+        const response = await makeRequest(`/api/apps/${currentLogsApp}/logs`);
+
+        if (response && response.ok) {
+            const data = await response.json();
+            logsContent.textContent = data.logs || 'No logs available';
+        } else {
+            logsContent.textContent = 'Failed to fetch logs';
+        }
+    }
+
+    function refreshDashboard() {
+        location.reload();
+    }
+
+    // Auto-refresh every 30 seconds
+    setInterval(() => {
+        // Refresh metrics without full page reload
+        fetch('/api/apps')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('totalApps').textContent = data.length;
+                const running = data.filter(app => app.status === 'running').length;
+                document.getElementById('runningApps').textContent = running;
+                document.getElementById('stoppedApps').textContent = data.length - running;
+            })
+            .catch(console.error);
+    }, 30000);
+</script>
 
 </body>
 </html>

@@ -2,8 +2,17 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from typing import Optional
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, Security
+from fastapi import (
+    BackgroundTasks,
+    Body,
+    Depends,
+    FastAPI,
+    HTTPException,
+    Request,
+    Security,
+)
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.security import APIKeyHeader
 from fastapi.templating import Jinja2Templates
@@ -308,3 +317,188 @@ def trigger(background_tasks: BackgroundTasks):
 
 
 app.include_router(webhook_router)
+
+
+@app.post("/api/deploy", dependencies=[Depends(require_api_key)])
+async def deploy_application(
+    background_tasks: BackgroundTasks,
+    repository: dict = Body(...),
+    container_port: int = Body(8080),
+    domain: Optional[str] = Body(None),
+    environment: Optional[dict] = Body(None),
+):
+    """Deploy application via dashboard."""
+    try:
+        app_name = repository.get("name")
+        repo_url = repository.get("clone_url")
+
+        if not app_name or not repo_url:
+            raise HTTPException(status_code=400, detail="Missing app_name or repo_url")
+
+        def _deploy_task():
+            try:
+                # Clone repository
+                gm = GitManager()
+                path = gm.clone_repository(repo_url, app_name)
+
+                # Build image
+                tag = f"{app_name}:latest"
+                engine.build_image(path, tag)
+
+                # Deploy
+                result = engine.deploy(
+                    app_name,
+                    tag,
+                    container_port=container_port,
+                    environment=environment,
+                )
+
+                if result.status == "ok":
+                    # Configure proxy
+                    # from core.network import PortManager
+
+                    pm = ProxyManager()
+                    # port_mgr = PortManager()
+
+                    host_port = result.get_host_port()
+                    if host_port:
+                        target_domain = domain or f"{app_name}.localhost"
+                        config = pm.generate_config(app_name, host_port, target_domain)
+                        pm.write_config(app_name, config, overwrite=True)
+                        pm.enable_config(app_name)
+
+                        try:
+                            pm.reload_nginx()
+                        except FileNotFoundError:
+                            logger.warning("Nginx not available")
+
+                logger.info(f"Deployment successful: {app_name}")
+            except Exception as e:
+                logger.error(f"Deployment failed: {e}")
+
+        background_tasks.add_task(_deploy_task)
+        return {"status": "accepted", "message": "Deployment started"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/apps/{app_name}/restart", dependencies=[Depends(require_api_key)])
+async def restart_application(app_name: str):
+    """Restart an application."""
+    try:
+        containers = engine.list_containers(app_name)
+        if not containers:
+            raise HTTPException(status_code=404, detail="Application not found")
+
+        for container in containers:
+            container.restart(timeout=10)
+
+        return {"status": "ok", "message": f"Restarted {app_name}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/apps/{app_name}/stop", dependencies=[Depends(require_api_key)])
+async def stop_application(app_name: str):
+    """Stop an application."""
+    try:
+        containers = engine.list_containers(app_name)
+        if not containers:
+            raise HTTPException(status_code=404, detail="Application not found")
+
+        for container in containers:
+            container.stop(timeout=10)
+
+        return {"status": "ok", "message": f"Stopped {app_name}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/apps/{app_name}/start", dependencies=[Depends(require_api_key)])
+async def start_application(app_name: str):
+    """Start a stopped application."""
+    try:
+        containers = engine.list_containers(app_name)
+        if not containers:
+            raise HTTPException(status_code=404, detail="Application not found")
+
+        for container in containers:
+            container.start()
+
+        return {"status": "ok", "message": f"Started {app_name}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/apps/{app_name}", dependencies=[Depends(require_api_key)])
+async def delete_application(app_name: str):
+    """Delete an application and clean up resources."""
+    try:
+        # Stop and remove containers
+        containers = engine.list_containers(app_name)
+        for container in containers:
+            try:
+                container.stop(timeout=5)
+                container.remove(force=True)
+            except Exception as e:
+                logger.warning(f"Failed to remove container: {e}")
+
+        # Remove nginx config
+        try:
+            pm = ProxyManager()
+            pm.disable_config(app_name)
+            pm.remove_config(app_name)
+            pm.reload_nginx()
+        except Exception as e:
+            logger.warning(f"Failed to remove proxy config: {e}")
+
+        # Delete repository
+        try:
+            gm = GitManager()
+            gm.delete_repository(app_name)
+        except Exception as e:
+            logger.warning(f"Failed to delete repository: {e}")
+
+        return {"status": "ok", "message": f"Deleted {app_name}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/apps/{app_name}/logs", dependencies=[Depends(require_api_key)])
+async def get_application_logs(app_name: str, tail: int = 100):
+    """Get application logs."""
+    try:
+        containers = engine.list_containers(app_name)
+        if not containers:
+            raise HTTPException(status_code=404, detail="Application not found")
+
+        logs = []
+        for container in containers:
+            try:
+                container_logs = container.logs(tail=tail, timestamps=True).decode(
+                    'utf-8'
+                )
+                logs.append(f"=== Container {container.id[:12]} ===\n{container_logs}")
+            except Exception as e:
+                logs.append(f"Failed to fetch logs: {e}")
+
+        return {"logs": "\n\n".join(logs)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/apps")
+async def list_applications():
+    """List all applications (public endpoint for dashboard auto-refresh)."""
+    try:
+        apps = engine.list_apps()
+        return apps
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
