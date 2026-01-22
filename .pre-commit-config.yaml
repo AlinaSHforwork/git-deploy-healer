@@ -41,3 +41,12 @@ repos:
       - id: end-of-file-fixer
       - id: trailing-whitespace
       - id: check-yaml
+
+  - repo: local
+    hooks:
+      - id: check-secrets
+        name: Check for test/weak credentials
+        entry: python scripts/check_secrets.py
+        language: system
+        files: \.env$|\.env\..*$
+        pass_filenames: true

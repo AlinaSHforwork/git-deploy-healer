@@ -65,6 +65,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Could not initialize metrics: {e}")
 
+    # SECURITY: Validate secrets on startup
+    from core.security import check_secrets_on_startup
+
+    deployment_mode = os.getenv("DEPLOYMENT_MODE", "local")
+
+    # Strict validation for AWS/production, warnings only for local
+    try:
+        check_secrets_on_startup(strict=(deployment_mode == "aws"))
+    except ValueError as e:
+        logger.critical(f"Startup aborted: {e}")
+        raise
+
+    try:
+        current_apps = engine.list_apps()
+        logger.info(f"Observability initialized. Active apps: {len(current_apps)}")
+    except Exception as e:
+        logger.warning(f"Could not initialize metrics: {e}")
+
     # Initialize database (optional, only if using DB features)
     db_manager = None
     try:

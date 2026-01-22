@@ -1,5 +1,5 @@
 # tests/conftest.py
-"""Enhanced test configuration with better mocks and fixtures."""
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -7,6 +7,11 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 from httpx import AsyncClient as _orig_AsyncClient
+
+os.environ["TESTING"] = "1"
+os.environ["API_KEY"] = "test-key-for-testing-only"
+os.environ["GITHUB_WEBHOOK_SECRET"] = "test-webhook-secret-for-testing"
+"""Enhanced test configuration with better mocks and fixtures."""
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
