@@ -5,11 +5,11 @@
 
 PyPaaS is a lightweight, developer‑friendly Platform‑as‑a‑Service engine that automates deployments from Git repositories. It builds Docker images, deploys containers, updates Nginx routing, and includes a self‑healing daemon to restart unhealthy apps. Inspired by Heroku and Kubernetes, PyPaaS brings Git‑Ops workflows, observability, and cloud‑ready infrastructure — without the complexity.
 
-Ideal for:
-- local development PaaS
-- self‑hosted mini‑cloud
+**Ideal for:**
+- Local development PaaS
+- Self‑hosted mini‑cloud
 - DevOps learning projects
-- deployment automation demos
+- Deployment automation demos
 
 ---
 
@@ -22,13 +22,13 @@ Ideal for:
   Nginx reverse proxy updates with atomic config swaps.
 
 - **Self‑Healing Engine**
-  Background daemon detects unhealthy containers and restarts them.
+  Background daemon detects unhealthy containers and restarts them automatically.
 
 - **Observability**
   Prometheus metrics for deploys, restarts, and active apps.
 
 - **CLI Tooling**
-  Manual deploys via `main.py`.
+  Manual deploys via `main.py` or API.
 
 - **Cloud‑Ready IaC**
   Terraform modules for AWS (VPC, ALB, ASG, IAM, multi‑AZ).
@@ -46,7 +46,7 @@ Ideal for:
 
 ## **Architecture**
 
-PyPaaS runs as a FastAPI service (port `8085`) with background tasks for deployments and healing. Terraform optionally provisions scalable AWS infrastructure.
+PyPaaS runs as a FastAPI service (default port `8080`) backed by PostgreSQL and Nginx.
 
 ```mermaid
 flowchart TD
@@ -59,7 +59,7 @@ flowchart TD
     G -->|Routes Traffic| H[Running Containers]
     I[Healer Daemon] -->|Periodic Check| J[Detect Unhealthy Containers]
     J -->|Restart/Recreate| F
-    K[ALB] -->|Forward to 8085| L[ASG EC2 Instances]
+    K[ALB] -->|Forward to Port 80| L[ASG EC2 Instances]
     L --> B
 
     subgraph LocalHost
@@ -85,164 +85,183 @@ flowchart TD
 
 ## **Tech Stack**
 
-- **Backend:** Python 3.12, FastAPI, Uvicorn
-- **DevOps:** Docker SDK, GitPython, Prometheus, Loguru
-- **Infra:** Nginx, Terraform, AWS (optional)
-- **CI/CD:** GitHub Actions, Pytest, Flake8, Trivy
+* **Backend:** Python 3.12, FastAPI, Uvicorn
+* **Database:** PostgreSQL 15 (Dockerized)
+* **DevOps:** Docker SDK, GitPython, Prometheus, Loguru
+* **Infra:** Nginx, Terraform, AWS (optional)
+* **CI/CD:** GitHub Actions, Pytest, Flake8, Trivy
 
 ---
 
 ## **Prerequisites**
 
-- Python 3.12+
-- Docker Engine
-- Git
-- Nginx (for routing)
-- Terraform (optional, for AWS)
-- AWS account (optional)
+* Docker Engine & Docker Compose
+* Git
+* AWS Account (Optional, for cloud deployment)
+* Terraform (Optional, for AWS)
 
 ---
 
-## **Local Setup**
+## **Local Setup (Docker Compose)**
+
+The easiest way to run PyPaaS locally is via Docker Compose, which spins up the API, Nginx, and PostgreSQL database automatically.
 
 ### 1. Clone the repository
+
 ```bash
-git clone https://github.com/AlinaSHforwork/git-deploy-healer.git
+git clone [https://github.com/AlinaSHforwork/git-deploy-healer.git](https://github.com/AlinaSHforwork/git-deploy-healer.git)
 cd git-deploy-healer
+
 ```
 
-### 2. Create your `.env`
-```env
+### 2. Configure Environment
+
+Create a `.env` file in the root directory. You can copy the example below:
+
+```bash
+# .env
 DEPLOYMENT_MODE=local
-DATABASE_URL=sqlite:///./local.db
-API_KEY=dev-api-key
-GITHUB_WEBHOOK_SECRET=dev-webhook-secret
+APP_PORT=8080
+
+# Database Config
+POSTGRES_USER=custom_user
+POSTGRES_PASSWORD=secure_password
+POSTGRES_DB=postgres
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
+DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+
+# Security
+API_KEY=my-super-secret-key
+GITHUB_WEBHOOK_SECRET=my-webhook-secret
+
 ```
 
-### 3. Install dependencies
+### 3. Run the Stack
+
+Start the application and database containers:
+
+```bash
+docker-compose up --build
+
+```
+
+* **Dashboard:** http://localhost:8080/dashboard
+* **API Docs:** http://localhost:8080/docs
+* **Metrics:** http://localhost:8080/metrics
+
+### 4. Deploy a Sample App
+
+You can trigger a deployment via the API:
+
+```bash
+curl -X POST "http://localhost:8080/api/deploy" \
+     -H "Content-Type: application/json" \
+     -H "X-API-Key: my-super-secret-key" \
+     -d '{
+           "repo_url": "[https://github.com/AlinaSHforwork/git-deploy-healer.git](https://github.com/AlinaSHforwork/git-deploy-healer.git)",
+           "app_name": "test-app",
+           "branch": "main"
+         }'
+
+```
+
+### 5. Run Tests
+
+You can run the test suite inside the container or locally (if you have a virtual environment).
+
+**Inside Docker:**
+
+```bash
+docker-compose exec app pytest tests/unit/ -v
+
+```
+
+**Locally:**
+
 ```bash
 pip install -r requirements.txt
-```
+pytest tests/unit/ -v
 
-### 4. Run the server
-```bash
-uvicorn api.server:app --host 0.0.0.0 --port 8085 --reload
-```
-
-- API Docs: http://localhost:8085/docs
-- Health Check: http://localhost:8085/health
-- Metrics: http://localhost:8085/metrics
-- Dashboard: http://localhost:8085/dashboard
-
-### 5. Deploy a sample app
-Use the included example:
-
-```bash
-python main.py my-webapp repos/my-webapp
-```
-
-Or simulate a webhook:
-
-```json
-{
-  "repository": {
-    "name": "my-webapp",
-    "clone_url": "path/to/repo"
-  }
-}
-```
-
-### 6. Nginx proxy setup
-Configure subdomain routing (e.g., `myapp.localhost`).
-See `core/proxy_manager.py` for generated config templates.
-
-### 7. Run tests
-```bash
-pytest --cov
-flake8 .
 ```
 
 ---
 
 ## **Cloud Deployment (AWS)**
 
-Terraform provisions:
+Terraform provisions a production-ready environment including:
 
-- VPC + subnets
-- ALB
-- Auto Scaling Group (1–3 EC2 instances)
-- IAM roles
-- Security groups
+* VPC + Private/Public Subnets
+* Application Load Balancer (ALB)
+* Auto Scaling Group (ASG)
+* IAM Roles & Security Groups
 
 ### 1. Initialize Terraform
+
 ```bash
+cd terraform
 terraform init
+
 ```
 
-### 2. Plan & apply
+### 2. Plan & Apply
+
 ```bash
 terraform plan
 terraform apply
+
 ```
 
-### 3. Provision EC2 instances
-Using Ansible:
-```bash
-ansible-playbook ansible/provision.yml -i <ec2-ip>,
-```
+### 3. Provisioning
 
-### 4. Access
-- Dashboard: `http://<alb-dns>/`
-- SSH:
-  ```bash
-  ssh -i ~/.ssh/id_rsa ubuntu@<ec2-ip>
-  ```
+Once the infrastructure is up, you can use Ansible or User Data scripts to bootstrap the EC2 instances.
 
-### 5. Destroy
+### 4. Cleanup
+
 ```bash
 terraform destroy
+
 ```
 
 ---
 
 ## **CI/CD Pipeline**
 
-GitHub Actions includes:
+This repository includes a GitHub Actions workflow (`ci.yml`) that performs:
 
-- Linting (Flake8)
-- Testing (Pytest + Coverage)
-- Docker build
-- Security scan (Trivy)
-- Terraform validate/plan
+* **Linting:** Flake8 compliance
+* **Testing:** Pytest with coverage reporting
+* **Security:** Trivy filesystem scan
+* **Build:** Docker image build verification
+* **IaC:** Terraform validation
 
-Secrets stored in repo settings:
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- `CODECOV_TOKEN` (optional)
+**Required Secrets for Actions:**
+
+* `AWS_ACCESS_KEY_ID`
+* `AWS_SECRET_ACCESS_KEY`
+* `CODECOV_TOKEN` (optional)
 
 ---
 
-## **Production Hardening**
+## **Production Considerations**
 
-- Enable HTTPS (ACM + ALB)
-- Restrict IP ranges
-- Use AWS SSM or Vault for secrets
-- Add autoscaling policies
-- Export metrics to Grafana/CloudWatch
-- Add alerting for healer restarts
-- Use Terraform workspaces for dev/staging/prod
+For a production environment, consider the following hardening steps:
+
+* **Secrets:** Use AWS SSM Parameter Store or HashiCorp Vault instead of `.env` files.
+* **HTTPS:** Enable SSL/TLS termination at the ALB level using AWS ACM.
+* **Network:** Restrict Security Groups to allow traffic only from the ALB.
+* **Monitoring:** Export Prometheus metrics to Grafana or CloudWatch.
 
 ---
 
 ## **Troubleshooting**
 
-- **Docker build fails** → check Dockerfile in app repo
-- **Container not running** → `docker logs <id>`
-- **Webhook errors** → validate payload + clone URL
-- **Terraform issues** → `terraform validate`
+* **Database Connection Fails:** Ensure the `db` container is healthy and `DATABASE_URL` in `.env` matches the Postgres credentials.
+* **Docker Build Fails:** Check the `Dockerfile` in the target repository.
+* **Webhook 403/401:** Verify `X-API-Key` or Webhook Secret matches your `.env`.
 
 ---
 
 ## **License**
 
-MIT License — see [LICENSE](LICENSE).
+MIT License — see [LICENSE](https://www.google.com/search?q=LICENSE).

@@ -1,6 +1,7 @@
 # core/healer.py
-"""Self-healing daemon with race condition protection and distributed locking."""
+"""Self-healing daemon with race condition protection and repository path tracking."""
 import asyncio
+from pathlib import Path
 from typing import Any, List, Optional, Set
 
 from docker.errors import APIError, NotFound
@@ -113,7 +114,7 @@ class ContainerHealer:
         return healed_containers
 
     async def heal(self, container: Any) -> bool:
-        """Heal a single container with exponential backoff.
+        """Heal a single container with repository path support.
 
         Args:
             container: Container object to heal
@@ -127,10 +128,12 @@ class ContainerHealer:
 
         short_id = container_id[:12]
         app_name = None
+        repo_path = None
 
         try:
             labels = getattr(container, "labels", {})
             app_name = labels.get("app", "unknown")
+            repo_path = labels.get("repo_path")  # Get stored repo path
 
             logger.info(f"Attempting to heal container {short_id} ({app_name})")
 
@@ -171,8 +174,28 @@ class ContainerHealer:
                     except Exception:  # nosec B110
                         pass  # Container might already be gone
 
-                    # Redeploy
-                    result = self.engine.deploy(app_name, f"{app_name}:latest")
+                    # Try to use stored repo_path or default
+                    if not repo_path or not Path(repo_path).exists():
+                        # Try default location
+                        from core.git_manager import GitManager
+
+                        gm = GitManager()
+                        default_path = gm.get_repository_path(app_name)
+
+                        if Path(default_path).exists():
+                            repo_path = default_path
+                            logger.info(f"Using default repo path: {repo_path}")
+                        else:
+                            logger.error(
+                                f"Repository not found for {app_name}, cannot redeploy. "
+                                f"Tried: {repo_path}, {default_path}"
+                            )
+                            return False
+
+                    # Redeploy with repo_path
+                    result = self.engine.deploy(
+                        app_name, f"{app_name}:latest", repo_path=repo_path
+                    )
 
                     if result.status == "ok":
                         logger.info(f"Successfully redeployed {app_name}")

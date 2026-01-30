@@ -4,19 +4,42 @@ services:
   app:
     build: .
     ports:
-      - "8080:8080"
-    env_file: .env
+      - "${APP_PORT}:${APP_PORT}"
+    env_file:
+      - .env
     environment:
-      - DEPLOYMENT_MODE=local
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+
+    user: root
+
+    entrypoint: []
+
+    command: >
+      bash -c "
+      ln -sf /dev/stdout /var/log/nginx/access.log &&
+      ln -sf /dev/stderr /var/log/nginx/error.log &&
+      sed -i '/pid/d' /etc/nginx/nginx.conf &&
+      nginx -g 'pid /run/nginx.pid; daemon on;' &&
+      echo 'Nginx started successfully' &&
+      uvicorn api.server:app --host 0.0.0.0 --port ${APP_PORT} --reload
+      "
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/app
     depends_on:
       - db
 
   db:
     image: postgres:15
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: pypaas
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
     volumes:
       - db_data:/var/lib/postgresql/data
 
